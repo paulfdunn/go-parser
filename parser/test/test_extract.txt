@@ -1,0 +1,5 @@
+2023-10-07 12:00:00.00 MDT  0         0         notification  debug          multi word type     sw_a          Unit 12.Ab.34 message
+2023-10-07 12:00:00.01 MDT  1         001       notification  info           SingleWordType      sw_b          Info SW version = 1.2.34 message
+2023-10-07 12:00:00.02 MDT  1         002       status        info           alphanumeric value  sw_a          Message with alphanumberic value abc123def
+2023-10-07 12:00:00.03 MDT  1         003       status        info           alphanumeric value  sw_a          val=1 flag = 20 other 3.AB
+2023-10-07 12:00:00.03 MDT  1         003       status        info           alphanumeric value  sw_a          val=2 flag = 30 other 4.cd

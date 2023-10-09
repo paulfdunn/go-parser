@@ -1,0 +1,4 @@
+# Comment line
+2023-10-07 12:00:00.00 MDT  0         0         notification  debug          will it filter     sw_a          Debug SW message
+2023-10-07 12:00:00.01 MDT  1         001       notification  info           negative filter      sw_b          Info SW message
+2023-10-07 12:00:00.02 MDT  1         002       status        info           will it filter  sw_a          Message with alphanumberic value abc123def
