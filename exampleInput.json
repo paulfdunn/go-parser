@@ -1,0 +1,39 @@
+{
+    "Delimiter": "\\s\\s",
+    "DelimiterString": "  ",
+    "Extracts": [
+        {
+            "Columns":      [7],
+            "RegexString": "(^|\\s+)(([0-9]+[a-zA-Z_\\.\\-\\:]|[a-zA-Z]+[0-9_\\.\\-\\:])[a-zA-Z0-9_\\.\\-\\:]*)(\\s+|$)",
+            "Token":       " {} ",
+            "Submatch":    2
+        },
+        {
+            "Columns":      [7],
+            "RegexString": "(^|\\s+)([0-9\\.]+)(^|\\s+)",
+            "Token":       " {} ",
+            "Submatch":    2
+        },
+        {
+            "Columns":      [7],
+            "RegexString": "=([0-9\\.]+)(^|\\s+)",
+            "Token":       "={} ",
+            "Submatch":    1
+        }
+    ],
+    "ExpectedFieldCount": 8,
+    "NegativeFilter": "",
+    "PositiveFilter": "(\\d{4}-\\d{2}-\\d{2}[ -]\\d{2}:\\d{2}:\\d{2}\\.\\d{2}\\s+[a-zA-Z]{2,5})",
+    "Replacements": [
+        {
+            "_comment": "add extra spaces",
+            "RegexString": "(\\d{4}-\\d{2}-\\d{2}[ -]\\d{2}:\\d{2}:\\d{2}\\.\\d{2}\\s+[a-zA-Z]{2,5})\\s+(\\d+)\\s+(\\d+)",
+            "Replacement": "${1}  ${2}  ${3}  "
+        },
+        {
+            "_comment": "remove extra spaces",
+            "RegexString": "\\s\\s+",
+            "Replacement": "  "
+        }
+    ]
+}

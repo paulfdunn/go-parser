@@ -1,0 +1,4 @@
+2023-10-07 12:00:00.00 MDT  0         0         notification  debug          multi word type     sw_a          Debug SW message
+2023-10-07 12:00:00.01 MDT  1         001       notification  info           SingleWordType      sw_b          Info SW message
+2023-10-07 12:00:00.02 MDT  1         002       status        info           alphanumeric value  sw_a          Message with alphanumberic value abc123def
+2023-10-07 12:00:00.03 MDT  1         003       status        info           alphanumeric value  sw_a          Message   with   extra   delimiters

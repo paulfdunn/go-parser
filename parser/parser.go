@@ -9,15 +9,17 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"regexp"
+	"sort"
 )
 
 // Extract objects determine how extractions (Scanner.Extract) occur.
-// The RegexString is converted to a regex and is run against the specified data column (after Split).
+// The RegexString is converted to a regex and is run against the specified data columns (after Split).
 // Submatches is used to index submatches returned from regex.FindAllStringSubmatch(regex,-1) which are
 // returned. The submatches are replaced with Token in the source data.
 type Extract struct {
-	Column      int
+	Columns     []int
 	RegexString string
 	Submatch    int
 	Token       string
@@ -37,18 +39,23 @@ type Replacement struct {
 // delimiter - Used by Split to split rows of data.
 // extract - Extract objects; used for extracting values from rows into their own fields.
 // negativeFilter - Regex used for negative filtering. Rows matching this value are excluded.
+// processedDirectory - When Read completes, move the file to this directory; empty string
+//
+//	means the file is left in place.
+//
 // positiveFilter - Regex used for positive filtering. Rows must match to be included.
 // replace - Replacement values used for performing regex replacements on input data.
 type Scanner struct {
-	dataChan       chan string
-	delimiter      *regexp.Regexp
-	errorChan      chan error
-	extract        []*Extract
-	file           *os.File
-	negativeFilter *regexp.Regexp
-	positiveFilter *regexp.Regexp
-	replace        []*Replacement
-	scanner        *bufio.Scanner
+	dataChan           chan string
+	delimiter          *regexp.Regexp
+	errorChan          chan error
+	extract            []*Extract
+	file               *os.File
+	negativeFilter     *regexp.Regexp
+	positiveFilter     *regexp.Regexp
+	processedDirectory string
+	replace            []*Replacement
+	scanner            *bufio.Scanner
 }
 
 // Extract takes an input row slice (call Split to split a row on scnr.delimiter)
@@ -56,18 +63,20 @@ type Scanner struct {
 func (scnr *Scanner) Extract(row []string) []string {
 	var extracts []string
 	for _, extrct := range scnr.extract {
-		if extrct.Column >= len(row) {
-			continue
-		}
-
-		sbms := extrct.regex.FindAllStringSubmatch(row[extrct.Column], -1)
-		for _, sbm := range sbms {
-			if extrct.Submatch >= len(sbm) {
+		for ec := range extrct.Columns {
+			if extrct.Columns[ec] >= len(row) {
 				continue
 			}
-			extracts = append(extracts, sbm[extrct.Submatch])
+
+			sbms := extrct.regex.FindAllStringSubmatch(row[extrct.Columns[ec]], -1)
+			for _, sbm := range sbms {
+				if extrct.Submatch >= len(sbm) {
+					continue
+				}
+				extracts = append(extracts, sbm[extrct.Submatch])
+			}
+			row[extrct.Columns[ec]] = extrct.regex.ReplaceAllString(row[extrct.Columns[ec]], extrct.Token)
 		}
-		row[extrct.Column] = extrct.regex.ReplaceAllString(row[extrct.Column], extrct.Token)
 	}
 
 	return extracts
@@ -88,12 +97,12 @@ func (scnr *Scanner) Filter(row string) bool {
 
 // OpenFileScanner convenience function to open a file based scanner.
 func (scnr *Scanner) OpenFileScanner(filePath string) (err error) {
-	file, err := os.Open(filePath)
+	scnr.file, err = os.Open(filePath)
 	if err != nil {
 		return err
 	}
 
-	scnr.OpenIoReaderScanner(file)
+	scnr.OpenIoReaderScanner(scnr.file)
 	return nil
 }
 
@@ -111,6 +120,9 @@ func (scnr *Scanner) Read(databuffer int, errorBuffer int) (<-chan string, <-cha
 	scnr.dataChan = make(chan string, databuffer)
 	scnr.errorChan = make(chan error, errorBuffer)
 	go func() {
+		defer close(scnr.dataChan)
+		defer close(scnr.errorChan)
+
 		for scnr.scanner.Scan() {
 			row := scnr.scanner.Text()
 			if err := scnr.scanner.Err(); err != nil {
@@ -120,9 +132,17 @@ func (scnr *Scanner) Read(databuffer int, errorBuffer int) (<-chan string, <-cha
 
 			scnr.dataChan <- row
 		}
+
+		// The name will not be available after Shutdown()
+		processedFileName := scnr.file.Name()
 		scnr.Shutdown()
-		close(scnr.dataChan)
-		close(scnr.errorChan)
+
+		if scnr.processedDirectory != "" {
+			err := os.Rename(processedFileName, filepath.Join(scnr.processedDirectory, filepath.Base(processedFileName)))
+			if err != nil {
+				scnr.errorChan <- err
+			}
+		}
 	}()
 
 	return scnr.dataChan, scnr.errorChan
@@ -136,7 +156,8 @@ func (scnr *Scanner) Replace(row string) string {
 	return row
 }
 
-// Shutdown performs an orderly shutdown on the scanner.
+// Shutdown performs an orderly shutdown on the scanner and is automatically called
+// when Read completes. Callers should call shutdown if a scanner is created but not used.
 func (scnr *Scanner) Shutdown() {
 	if scnr.file != nil {
 		scnr.file.Close()
@@ -150,6 +171,9 @@ func (scnr *Scanner) Split(row string) []string {
 
 // Hash returns the hex string of the MD5 hash of the input. Call this on fields where
 // values have been extracted in order to perform pareto analysis on the resulting hashes.
+// This can also be used to reduce storage space when storing in a database by replacing
+// multiple fields with a single hash, and keeping a separate table mapping hashes to
+// original field values.
 func Hash(input string) string {
 	h := md5.New()
 	io.WriteString(h, input)
@@ -159,7 +183,7 @@ func Hash(input string) string {
 // NewScanner is a constuctor for Scanners. See the Scanner definition for
 // a description of inputs.
 func NewScanner(negativeFilter string, positiveFilter string, delimiter string,
-	replace []*Replacement, extract []*Extract) (*Scanner, error) {
+	replace []*Replacement, extract []*Extract, processedDirectory string) (*Scanner, error) {
 	rgx, err := regexp.Compile(delimiter)
 	if err != nil {
 		return nil, err
@@ -195,7 +219,27 @@ func NewScanner(negativeFilter string, positiveFilter string, delimiter string,
 		scnr.extract[index].regex = rgx
 	}
 
+	if _, err := os.Stat(processedDirectory); processedDirectory != "" && os.IsNotExist(err) {
+		return nil, fmt.Errorf("processedDirectory does not exist, error: %+v", err)
+	}
+	scnr.processedDirectory = processedDirectory
+
 	return scnr, nil
+}
+
+// Convenience function to sort a map of hashes based on counts. Used to help develop
+// extracts and hashes in order to reduce the total number of hashes.
+func SortedHashMapCounts(inputMap map[string]int) []string {
+	hashes := make([]string, 0, len(inputMap))
+
+	for hash := range inputMap {
+		hashes = append(hashes, hash)
+	}
+	sort.SliceStable(hashes, func(i, j int) bool {
+		return inputMap[hashes[i]] > inputMap[hashes[j]]
+	})
+
+	return hashes
 }
 
 func (scnr *Scanner) setFilter(positive bool, regex string) error {
