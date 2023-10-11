@@ -105,10 +105,10 @@ func main() {
 	}
 
 	// Open output file
-	outputFile, err := os.Create(filepath.Join(dataDirectory, filepath.Base(*inputFilePtr)))
+	outputFile, err := os.Create(filepath.Join(dataDirectory, filepath.Base(*inputFilePtr)+".parsed.txt"))
 	if err != nil {
 		lpf(logh.Error, "calling os.Create: %s", err)
-		os.Exit(13)
+		os.Exit(17)
 	}
 	defer outputFile.Close()
 	outputWriter := bufio.NewWriter(outputFile)

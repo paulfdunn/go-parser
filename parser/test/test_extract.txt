@@ -2,4 +2,6 @@
 2023-10-07 12:00:00.01 MDT  1         001       notification  info           SingleWordType      sw_b          Info SW version = 1.2.34 release=a.1.1
 2023-10-07 12:00:00.02 MDT  1         002       status        info           alphanumeric value  sw_a          Message with alphanumberic value abc123def
 2023-10-07 12:00:00.03 MDT  1         003       status        info           alphanumeric value  sw_a          val:1 flag:x20 other:X30 on 127.0.0.1:8080
-2023-10-07 12:00:00.04 MDT  1         004       status        info           alphanumeric value  sw_a          val=2 flag = 30 other 4.cd on (ABC.123_45)
+2023-10-07 12:00:00.04 MDT  1         004       status        info           alphanumeric value  sw_a          val=2 flag = 30 other 3.cd on (ABC.123_45)
+2023-10-07 12:00:00.05 MDT  1         005       status        info           alphanumeric value  sw_a          val=3 flag = 40 other 4.ef on (DEF.678_90)
+2023-10-07 12:00:00.06 MDT  1         006       status        info           alphanumeric value  sw_a          val=4 flag = 50 other 5.gh on (GHI.098_76)
