@@ -20,11 +20,12 @@ var (
 	appName = "go-parser"
 
 	// CLI flags
-	dataFilePtr  *string
-	inputFilePtr *string
-	logFilePtr   *string
-	logLevel     *int
-	stdoutPtr    *bool
+	dataFilePtr        *string
+	inputFilePtr       *string
+	logFilePtr         *string
+	logLevel           *int
+	outputDelimiterPtr *string
+	stdoutPtr          *bool
 
 	// dataDirectorySuffix is appended to the users home directory.
 	dataDirectorySuffix = filepath.Join(`tmp`, appName)
@@ -62,6 +63,7 @@ func main() {
 	logFilePtr = flag.String("logfile", "", "Name of log file in "+dataDirectory+"; blank to print logs to terminal.")
 	logLevel = flag.Int("loglevel", int(logh.Info), fmt.Sprintf("Logging level; default %d. Zero based index into: %v",
 		int(logh.Info), logh.DefaultLevels))
+	outputDelimiterPtr = flag.String("outputdelimiter", "|", "Delimiter used for output.")
 	stdoutPtr = flag.Bool("stdout", true, "Output parsed data to STDOUT")
 	flag.Parse()
 
@@ -140,7 +142,7 @@ func main() {
 		splits := scnr.Split(row)
 		if len(splits) != inputs.ExpectedFieldCount {
 			unexpectedFieldCount++
-			lp(logh.Error, fmt.Sprintf("field count=%d|", len(splits))+strings.Join(splits, "|"))
+			lp(logh.Error, fmt.Sprintf("field count=%d|", len(splits))+strings.Join(splits, *outputDelimiterPtr))
 		}
 		extracts := scnr.Extract(splits)
 
@@ -150,7 +152,7 @@ func main() {
 			for _, v := range sortedHashColumns {
 				hashSplits = append(hashSplits, splits[v])
 			}
-			hashString := strings.Join(hashSplits, "|")
+			hashString := strings.Join(hashSplits, *outputDelimiterPtr)
 			hash := parser.Hash(hashString)
 			hashMap[hash] = hashString
 			hashCounts[hash] += 1
@@ -178,13 +180,13 @@ func main() {
 			}
 
 			if *stdoutPtr {
-				out := strings.Join(splitsExcludeHashColumns, "|") + "|EXTRACTS|" + strings.Join(extracts, "|")
+				out := strings.Join(splitsExcludeHashColumns, *outputDelimiterPtr) + "|EXTRACTS|" + strings.Join(extracts, *outputDelimiterPtr)
 				outputWriter.WriteString(out + "\n")
 				fmt.Println(out)
 			}
 		} else {
 			if *stdoutPtr {
-				out := strings.Join(splits, "|") + "|EXTRACTS|" + strings.Join(extracts, "|")
+				out := strings.Join(splits, *outputDelimiterPtr) + "|EXTRACTS|" + strings.Join(extracts, *outputDelimiterPtr)
 				outputWriter.WriteString(out + "\n")
 				fmt.Println(out)
 			}
