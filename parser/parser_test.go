@@ -357,7 +357,7 @@ func ExampleScanner_Extract_andHash() {
 		fullData = append(fullData, strings.Join(splits, "|"))
 		extracts := scnr.Extract(splits)
 		extractData = append(extractData, strings.Join(splits, "|")+
-			"| extracts:"+strings.Join(extracts, "|")+
+			"|EXTRACTS|"+strings.Join(extracts, "|")+
 			"| hash:"+Hash(splits[3]+splits[4]+splits[5]+splits[7]))
 	}
 	for err := range errorChan {
@@ -381,11 +381,11 @@ func ExampleScanner_Extract_andHash() {
 	// 2023-10-07 12:00:00.06 MDT|1|006|status|info|alphanumeric value|sw_a|val=4 flag = 50 other 5.gh on (GHI.098_76)
 	//
 	// Extract(ed) data:
-	// 2023-10-07 12:00:00.00 MDT|0|0|notification|debug|multi word type|sw_a|Unit {} message ({})| extracts:12.Ab.34|789| hash:a5a3dba744d3c6f1372f888f54447553
-	// 2023-10-07 12:00:00.01 MDT|1|001|notification|info|SingleWordType|sw_b|Info SW version = {} release={}| extracts:1.2.34|a.1.1| hash:9bd3989cf85b232ddadd73a1a312b249
-	// 2023-10-07 12:00:00.02 MDT|1|002|status|info|alphanumeric value|sw_a|Message with alphanumberic value {}| extracts:abc123def| hash:7f0e8136c3aec6bbde74dfbad17aef1c
-	// 2023-10-07 12:00:00.03 MDT|1|003|status|info|alphanumeric value|sw_a|val:{} flag:{} other:{} on {}| extracts:127.0.0.1:8080|1|x20|X30| hash:4907fb17a4212e2e09897fafa1cb758a
-	// 2023-10-07 12:00:00.04 MDT|1|004|status|info|alphanumeric value|sw_a|val={} flag = {} other {} on ({})| extracts:3.cd|2|ABC.123_45|30| hash:1b7739c1e24d3a837e7821ecfb9a1be1
-	// 2023-10-07 12:00:00.05 MDT|1|005|status|info|alphanumeric value|sw_a|val={} flag = {} other {} on ({})| extracts:4.ef|3|DEF.678_90|40| hash:1b7739c1e24d3a837e7821ecfb9a1be1
-	// 2023-10-07 12:00:00.06 MDT|1|006|status|info|alphanumeric value|sw_a|val={} flag = {} other {} on ({})| extracts:5.gh|4|GHI.098_76|50| hash:1b7739c1e24d3a837e7821ecfb9a1be1
+	// 2023-10-07 12:00:00.00 MDT|0|0|notification|debug|multi word type|sw_a|Unit {} message ({})|EXTRACTS|12.Ab.34|789| hash:a5a3dba744d3c6f1372f888f54447553
+	// 2023-10-07 12:00:00.01 MDT|1|001|notification|info|SingleWordType|sw_b|Info SW version = {} release={}|EXTRACTS|1.2.34|a.1.1| hash:9bd3989cf85b232ddadd73a1a312b249
+	// 2023-10-07 12:00:00.02 MDT|1|002|status|info|alphanumeric value|sw_a|Message with alphanumberic value {}|EXTRACTS|abc123def| hash:7f0e8136c3aec6bbde74dfbad17aef1c
+	// 2023-10-07 12:00:00.03 MDT|1|003|status|info|alphanumeric value|sw_a|val:{} flag:{} other:{} on {}|EXTRACTS|127.0.0.1:8080|1|x20|X30| hash:4907fb17a4212e2e09897fafa1cb758a
+	// 2023-10-07 12:00:00.04 MDT|1|004|status|info|alphanumeric value|sw_a|val={} flag = {} other {} on ({})|EXTRACTS|3.cd|2|ABC.123_45|30| hash:1b7739c1e24d3a837e7821ecfb9a1be1
+	// 2023-10-07 12:00:00.05 MDT|1|005|status|info|alphanumeric value|sw_a|val={} flag = {} other {} on ({})|EXTRACTS|4.ef|3|DEF.678_90|40| hash:1b7739c1e24d3a837e7821ecfb9a1be1
+	// 2023-10-07 12:00:00.06 MDT|1|006|status|info|alphanumeric value|sw_a|val={} flag = {} other {} on ({})|EXTRACTS|5.gh|4|GHI.098_76|50| hash:1b7739c1e24d3a837e7821ecfb9a1be1
 }

@@ -19,13 +19,13 @@ go run ./main.go -datafile="./parser/test/test_extract.txt" -inputfile="exampleI
 2023/10/11 18:28:16.251709 main.go:77:   debug: user.Current(): &{Uid:501 Gid:20 Username:pauldunn Name:PAUL DUNN HomeDir:/Users/pauldunn}
 2023/10/11 18:28:16.251742 main.go:78:    info: Data and logs being saved to directory: /Users/pauldunn/tmp/go-parser
 ---------------- PARSED OUTPUT START ----------------
-2023-10-07 12:00:00.00 MDT|0|0|notification|debug|multi word type|sw_a|Unit {} message ({})| extracts:12.Ab.34|789
-2023-10-07 12:00:00.01 MDT|1|001|notification|info|SingleWordType|sw_b|Info SW version = {} release={}| extracts:1.2.34|a.1.1
-2023-10-07 12:00:00.02 MDT|1|002|status|info|alphanumeric value|sw_a|Message with alphanumberic value {}| extracts:abc123def
-2023-10-07 12:00:00.03 MDT|1|003|status|info|alphanumeric value|sw_a|val:{} flag:{} other:{} on {}| extracts:127.0.0.1:8080|1|x20|X30
-2023-10-07 12:00:00.04 MDT|1|004|status|info|alphanumeric value|sw_a|val={} flag = {} other {} on ({})| extracts:3.cd|2|ABC.123_45|30
-2023-10-07 12:00:00.05 MDT|1|005|status|info|alphanumeric value|sw_a|val={} flag = {} other {} on ({})| extracts:4.ef|3|DEF.678_90|40
-2023-10-07 12:00:00.06 MDT|1|006|status|info|alphanumeric value|sw_a|val={} flag = {} other {} on ({})| extracts:5.gh|4|GHI.098_76|50
+2023-10-07 12:00:00.00 MDT|0|0|notification|debug|multi word type|sw_a|Unit {} message ({})|EXTRACTS|12.Ab.34|789
+2023-10-07 12:00:00.01 MDT|1|001|notification|info|SingleWordType|sw_b|Info SW version = {} release={}|EXTRACTS|1.2.34|a.1.1
+2023-10-07 12:00:00.02 MDT|1|002|status|info|alphanumeric value|sw_a|Message with alphanumberic value {}|EXTRACTS|abc123def
+2023-10-07 12:00:00.03 MDT|1|003|status|info|alphanumeric value|sw_a|val:{} flag:{} other:{} on {}|EXTRACTS|127.0.0.1:8080|1|x20|X30
+2023-10-07 12:00:00.04 MDT|1|004|status|info|alphanumeric value|sw_a|val={} flag = {} other {} on ({})|EXTRACTS|3.cd|2|ABC.123_45|30
+2023-10-07 12:00:00.05 MDT|1|005|status|info|alphanumeric value|sw_a|val={} flag = {} other {} on ({})|EXTRACTS|4.ef|3|DEF.678_90|40
+2023-10-07 12:00:00.06 MDT|1|006|status|info|alphanumeric value|sw_a|val={} flag = {} other {} on ({})|EXTRACTS|5.gh|4|GHI.098_76|50
 ---------------- PARSED OUTPUT END   ----------------
 2023/10/11 18:28:16.252592 main.go:213:    info: total lines with unexpected number of fields=0
 ```
@@ -38,13 +38,13 @@ go run ./main.go -datafile="./parser/test/test_extract.txt" -inputfile="exampleI
 2023/10/11 18:28:37.498537 main.go:77:   debug: user.Current(): &{Uid:501 Gid:20 Username:pauldunn Name:PAUL DUNN HomeDir:/Users/pauldunn}
 2023/10/11 18:28:37.498574 main.go:78:    info: Data and logs being saved to directory: /Users/pauldunn/tmp/go-parser
 ---------------- PARSED OUTPUT START ----------------
-2023-10-07 12:00:00.00 MDT|0|0|a07b3c1e3a1a0a0354fd900c1f38515d| extracts:12.Ab.34|789
-2023-10-07 12:00:00.01 MDT|1|001|11d590cff0915d91c47ee0cb22f33faa| extracts:1.2.34|a.1.1
-2023-10-07 12:00:00.02 MDT|1|002|2e7ddd79e7861f9157735943ba75e2b0| extracts:abc123def
-2023-10-07 12:00:00.03 MDT|1|003|03d287e66fa1648a82a312d09f998f53| extracts:127.0.0.1:8080|1|x20|X30
-2023-10-07 12:00:00.04 MDT|1|004|14a74c37f4ebbb911cd73aa6a00b7670| extracts:3.cd|2|ABC.123_45|30
-2023-10-07 12:00:00.05 MDT|1|005|14a74c37f4ebbb911cd73aa6a00b7670| extracts:4.ef|3|DEF.678_90|40
-2023-10-07 12:00:00.06 MDT|1|006|14a74c37f4ebbb911cd73aa6a00b7670| extracts:5.gh|4|GHI.098_76|50
+2023-10-07 12:00:00.00 MDT|0|0|a07b3c1e3a1a0a0354fd900c1f38515d|EXTRACTS|12.Ab.34|789
+2023-10-07 12:00:00.01 MDT|1|001|11d590cff0915d91c47ee0cb22f33faa|EXTRACTS|1.2.34|a.1.1
+2023-10-07 12:00:00.02 MDT|1|002|2e7ddd79e7861f9157735943ba75e2b0|EXTRACTS|abc123def
+2023-10-07 12:00:00.03 MDT|1|003|03d287e66fa1648a82a312d09f998f53|EXTRACTS|127.0.0.1:8080|1|x20|X30
+2023-10-07 12:00:00.04 MDT|1|004|14a74c37f4ebbb911cd73aa6a00b7670|EXTRACTS|3.cd|2|ABC.123_45|30
+2023-10-07 12:00:00.05 MDT|1|005|14a74c37f4ebbb911cd73aa6a00b7670|EXTRACTS|4.ef|3|DEF.678_90|40
+2023-10-07 12:00:00.06 MDT|1|006|14a74c37f4ebbb911cd73aa6a00b7670|EXTRACTS|5.gh|4|GHI.098_76|50
 ---------------- PARSED OUTPUT END   ----------------
 2023/10/11 18:28:37.499420 main.go:207:    info: len(hashCounts)=5
 2023/10/11 18:28:37.499427 main.go:208:   debug: Hashes and counts:

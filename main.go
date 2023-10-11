@@ -178,13 +178,13 @@ func main() {
 			}
 
 			if *stdoutPtr {
-				out := strings.Join(splitsExcludeHashColumns, "|") + "| extracts:" + strings.Join(extracts, "|")
+				out := strings.Join(splitsExcludeHashColumns, "|") + "|EXTRACTS|" + strings.Join(extracts, "|")
 				outputWriter.WriteString(out + "\n")
 				fmt.Println(out)
 			}
 		} else {
 			if *stdoutPtr {
-				out := strings.Join(splits, "|") + "| extracts:" + strings.Join(extracts, "|")
+				out := strings.Join(splits, "|") + "|EXTRACTS|" + strings.Join(extracts, "|")
 				outputWriter.WriteString(out + "\n")
 				fmt.Println(out)
 			}
