@@ -3,18 +3,21 @@
     "DelimiterString": "  ",
     "Extracts": [
         {
+            "_comment": "Must have one number and one [a-zA-Z\\.\\-\\:]. Submatch 0 is the full match, 1 leading spaces, and 2 is the alphanumeric",
             "Columns":      [7],
             "RegexString": "(^|\\s+)(([0-9]+[a-zA-Z_\\.\\-\\:]|[a-zA-Z]+[0-9_\\.\\-\\:])[a-zA-Z0-9_\\.\\-\\:]*)(\\s+|$)",
             "Token":       " {} ",
             "Submatch":    2
         },
         {
+            "_comment": "Find numbers that are delimited with spaces",
             "Columns":      [7],
             "RegexString": "(^|\\s+)([0-9\\.]+)(^|\\s+)",
             "Token":       " {} ",
             "Submatch":    2
         },
         {
+            "_comment":"Find numbers that are preceeded by '='",
             "Columns":      [7],
             "RegexString": "=([0-9\\.]+)(^|\\s+)",
             "Token":       "={} ",

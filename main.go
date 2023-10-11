@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -23,6 +24,7 @@ var (
 	inputFilePtr *string
 	logFilePtr   *string
 	logLevel     *int
+	stdoutPtr    *bool
 
 	// dataDirectorySuffix is appended to the users home directory.
 	dataDirectorySuffix = filepath.Join(`tmp`, appName)
@@ -39,18 +41,6 @@ func crashDetect() {
 			logh.Map[appName].Printf(logh.Error, fmt.Sprintf("%#v", errShutdown))
 		}
 	}
-}
-
-type Inputs struct {
-	Delimiter          string
-	DelimiterString    string
-	ExpectedFieldCount int
-	Extracts           []*parser.Extract
-	HashColumns        []int
-	NegativeFilter     string
-	PositiveFilter     string
-	ProcessedDirectory string
-	Replacements       []*parser.Replacement
 }
 
 func main() {
@@ -72,6 +62,7 @@ func main() {
 	logFilePtr = flag.String("logfile", "", "Name of log file in "+dataDirectory+"; blank to print logs to terminal.")
 	logLevel = flag.Int("loglevel", int(logh.Info), fmt.Sprintf("Logging level; default %d. Zero based index into: %v",
 		int(logh.Info), logh.DefaultLevels))
+	stdoutPtr = flag.Bool("stdout", true, "Output parsed data to STDOUT")
 	flag.Parse()
 
 	// Setup logging.
@@ -93,7 +84,7 @@ func main() {
 		logh.ShutdownAll()
 		os.Exit(1)
 	}
-	inputs := Inputs{}
+	inputs := parser.Inputs{}
 	err = json.Unmarshal(inputBytes, &inputs)
 	if err != nil {
 		lpf(logh.Error, "unmarshaling JSON input file: %+v", err)
@@ -102,8 +93,7 @@ func main() {
 	}
 
 	// Create the scanner and open the file.
-	scnr, err := parser.NewScanner(inputs.NegativeFilter, inputs.PositiveFilter,
-		inputs.Delimiter, inputs.Replacements, inputs.Extracts, inputs.ProcessedDirectory)
+	scnr, err := parser.NewScanner(inputs)
 	if err != nil {
 		lpf(logh.Error, "calling NewScanner: %s", err)
 		os.Exit(9)
@@ -113,6 +103,16 @@ func main() {
 		lpf(logh.Error, "calling OpenScanner: %s", err)
 		os.Exit(13)
 	}
+
+	// Open output file
+	outputFile, err := os.Create(filepath.Join(dataDirectory, filepath.Base(*inputFilePtr)))
+	if err != nil {
+		lpf(logh.Error, "calling os.Create: %s", err)
+		os.Exit(13)
+	}
+	defer outputFile.Close()
+	outputWriter := bufio.NewWriter(outputFile)
+	defer outputWriter.Flush()
 
 	// Process all data.
 	dataChan, errorChan := scnr.Read(100, 100)
@@ -125,6 +125,11 @@ func main() {
 	if inputs.HashColumns != nil && len(inputs.HashColumns) > 0 {
 		hashing = true
 	}
+
+	if *stdoutPtr {
+		fmt.Println("---------------- PARSED OUTPUT START ----------------")
+	}
+
 	for row := range dataChan {
 		if scnr.Filter(row) {
 			continue
@@ -172,14 +177,26 @@ func main() {
 				splitsExcludeHashColumns = append(splitsExcludeHashColumns, splits[i])
 			}
 
-			lp(logh.Info, strings.Join(splitsExcludeHashColumns, "|")+"| extracts:"+strings.Join(extracts, "|"))
+			if *stdoutPtr {
+				out := strings.Join(splitsExcludeHashColumns, "|") + "| extracts:" + strings.Join(extracts, "|")
+				outputWriter.WriteString(out + "\n")
+				fmt.Println(out)
+			}
 		} else {
-			lp(logh.Info, strings.Join(splits, "|")+"| extracts:"+strings.Join(extracts, "|"))
+			if *stdoutPtr {
+				out := strings.Join(splits, "|") + "| extracts:" + strings.Join(extracts, "|")
+				outputWriter.WriteString(out + "\n")
+				fmt.Println(out)
+			}
 		}
 
 		rows++
 	}
 	scnr.Shutdown()
+
+	if *stdoutPtr {
+		fmt.Println("---------------- PARSED OUTPUT END   ----------------")
+	}
 
 	for err := range errorChan {
 		lp(logh.Error, err)

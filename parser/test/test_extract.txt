@@ -1,5 +1,5 @@
-2023-10-07 12:00:00.00 MDT  0         0         notification  debug          multi word type     sw_a          Unit 12.Ab.34 message
-2023-10-07 12:00:00.01 MDT  1         001       notification  info           SingleWordType      sw_b          Info SW version = 1.2.34 message
+2023-10-07 12:00:00.00 MDT  0         0         notification  debug          multi word type     sw_a          Unit 12.Ab.34 message (789)
+2023-10-07 12:00:00.01 MDT  1         001       notification  info           SingleWordType      sw_b          Info SW version = 1.2.34 release=a.1.1
 2023-10-07 12:00:00.02 MDT  1         002       status        info           alphanumeric value  sw_a          Message with alphanumberic value abc123def
-2023-10-07 12:00:00.03 MDT  1         003       status        info           alphanumeric value  sw_a          val=1 flag = 20 other 3.AB
-2023-10-07 12:00:00.03 MDT  1         003       status        info           alphanumeric value  sw_a          val=2 flag = 30 other 4.cd
+2023-10-07 12:00:00.03 MDT  1         003       status        info           alphanumeric value  sw_a          val:1 flag:x20 other:X30 on 127.0.0.1:8080
+2023-10-07 12:00:00.04 MDT  1         004       status        info           alphanumeric value  sw_a          val=2 flag = 30 other 4.cd on (ABC.123_45)

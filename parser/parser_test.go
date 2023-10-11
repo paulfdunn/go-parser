@@ -10,15 +10,26 @@ import (
 )
 
 var (
+	defaultInputs = Inputs{
+		Delimiter:          "",
+		DelimiterString:    "",
+		ExpectedFieldCount: 0,
+		Extracts:           []*Extract{},
+		HashColumns:        []int{},
+		NegativeFilter:     "",
+		PositiveFilter:     "",
+		ProcessedDirectory: "",
+		Replacements:       []*Replacement{},
+	}
+
 	wd, _             = os.Getwd()
 	testDataDirectory = filepath.Join(wd, "./test")
 )
 
 // openFileScanner is a convenience test function for getting a NewScanner to the test file.
 // Callers must call scnr.Shutdown() when not calling Read.
-func openFileScanner(testDataFilePath string, negativeFilter string, positiveFilter string,
-	delimiter string, replacement []*Replacement, extract []*Extract) *Scanner {
-	scnr, err := NewScanner(negativeFilter, positiveFilter, delimiter, replacement, extract, "")
+func openFileScanner(testDataFilePath string, inputs Inputs) *Scanner {
+	scnr, err := NewScanner(inputs)
 	if err != nil {
 		var t *testing.T
 		t.Errorf("calling OpenScanner: %s", err)
@@ -30,7 +41,7 @@ func openFileScanner(testDataFilePath string, negativeFilter string, positiveFil
 
 // ExampleScanner_OpenFileScanner shows how to open a file for processing.
 func ExampleScanner_OpenFileScanner() {
-	scnr, err := NewScanner("", "", "", []*Replacement{}, []*Extract{}, "")
+	scnr, err := NewScanner(defaultInputs)
 	if err != nil {
 		var t *testing.T
 		t.Errorf("calling OpenScanner: %s", err)
@@ -51,7 +62,7 @@ func ExampleScanner_OpenIoReaderScanner() {
 		t.Errorf("calling os.Open: %s", err)
 	}
 
-	scnr, err := NewScanner("", "", "", []*Replacement{}, []*Extract{}, "")
+	scnr, err := NewScanner(defaultInputs)
 	if err != nil {
 		var t *testing.T
 		t.Errorf("calling OpenIoReaderScanner: %s", err)
@@ -64,7 +75,7 @@ func ExampleScanner_OpenIoReaderScanner() {
 
 // ExampleScanner_Read shows how to read data, with no other processing.
 func ExampleScanner_Read() {
-	scnr := openFileScanner(filepath.Join(testDataDirectory, "test_read.txt"), "", "", "", []*Replacement{}, []*Extract{})
+	scnr := openFileScanner(filepath.Join(testDataDirectory, "test_read.txt"), defaultInputs)
 	fmt.Println("Read all the test data")
 	dataChan, errorChan := scnr.Read(100, 100)
 	for row := range dataChan {
@@ -98,7 +109,7 @@ func TestScanner_Read_move(t *testing.T) {
 		t.Errorf("calling os.WriteFile: %s", err)
 	}
 
-	scnr := openFileScanner(tmpInputFilePath, "", "", "", []*Replacement{}, []*Extract{})
+	scnr := openFileScanner(tmpInputFilePath, defaultInputs)
 	scnr.processedDirectory = t.TempDir()
 	fmt.Println("Read all the test data")
 	dataChan, errorChan := scnr.Read(100, 100)
@@ -129,8 +140,9 @@ func TestScanner_Read_move(t *testing.T) {
 // Note the comment line and line with 'negative filter' are not included in the output.
 func ExampleScanner_Filter_negative() {
 	// The '\s+' is used in the filter only to show that it is a regex; a space could have been used.
-	scnr := openFileScanner(filepath.Join(testDataDirectory, "test_filter.txt"), `#|negative\s+filter`,
-		"", "", []*Replacement{}, []*Extract{})
+	inputs := defaultInputs
+	inputs.NegativeFilter = `#|negative\s+filter`
+	scnr := openFileScanner(filepath.Join(testDataDirectory, "test_filter.txt"), inputs)
 	dataChan, errorChan := scnr.Read(100, 100)
 	fullData := []string{}
 	filteredData := []string{}
@@ -165,9 +177,9 @@ func ExampleScanner_Filter_negative() {
 // ExampleScanner_Filter_positive shows how to use the positive filter to include lines matching a pattern.
 // Note lines without a timestamp are not included in the output
 func ExampleScanner_Filter_positive() {
-	scnr := openFileScanner(filepath.Join(testDataDirectory, "test_filter.txt"), "",
-		`\d{4}-\d{2}-\d{2}[ -]\d{2}:\d{2}:\d{2}\.\d{2}\s+[a-zA-Z]{2,5}`,
-		"", []*Replacement{}, []*Extract{})
+	inputs := defaultInputs
+	inputs.PositiveFilter = `\d{4}-\d{2}-\d{2}[ -]\d{2}:\d{2}:\d{2}\.\d{2}\s+[a-zA-Z]{2,5}`
+	scnr := openFileScanner(filepath.Join(testDataDirectory, "test_filter.txt"), inputs)
 	dataChan, errorChan := scnr.Read(100, 100)
 	fullData := []string{}
 	filteredData := []string{}
@@ -215,7 +227,10 @@ func ExampleScanner_Replace() {
 		{RegexString: "(class poor delimiting)", Replacement: delimiterString + "${1}" + delimiterString},
 		{RegexString: `\s\s+`, Replacement: delimiterString},
 	}
-	scnr := openFileScanner(filepath.Join(testDataDirectory, "test_replace.txt"), "", "", delimiter, rplc, []*Extract{})
+	inputs := defaultInputs
+	inputs.Delimiter = delimiter
+	inputs.Replacements = rplc
+	scnr := openFileScanner(filepath.Join(testDataDirectory, "test_replace.txt"), inputs)
 	dataChan, errorChan := scnr.Read(100, 100)
 	fullData := []string{}
 	replacedData := []string{}
@@ -247,8 +262,10 @@ func ExampleScanner_Replace() {
 func ExampleScanner_Split() {
 	delimiter := `\s\s+`
 	delimiterString := "  "
-	scnr := openFileScanner(filepath.Join(testDataDirectory, "test_split.txt"), "", "",
-		delimiter, []*Replacement{{RegexString: `\s\s+`, Replacement: delimiterString}}, []*Extract{})
+	inputs := defaultInputs
+	inputs.Delimiter = delimiter
+	inputs.Replacements = []*Replacement{{RegexString: `\s\s+`, Replacement: delimiterString}}
+	scnr := openFileScanner(filepath.Join(testDataDirectory, "test_split.txt"), inputs)
 	dataChan, errorChan := scnr.Read(100, 100)
 	fullData := []string{}
 	splitData := []string{}
@@ -289,24 +306,49 @@ func ExampleScanner_Split() {
 func ExampleScanner_Extract_andHash() {
 	delimiter := `\s\s+`
 	delimiterString := "  "
-	extrct1 := Extract{
-		Columns:     []int{7},
-		RegexString: `(^|\s+)(([0-9]+[a-zA-Z_\.\-\:]|[a-zA-Z]+[0-9_\.\-\:])[a-zA-Z0-9_\.\-\:]*)(\s+|$)`,
-		Token:       " {} ",
-		Submatch:    2}
-	extrct2 := Extract{
-		Columns:     []int{7},
-		RegexString: `(^|\s+)([0-9\.]+)(^|\s+)`,
-		Token:       " {} ",
-		Submatch:    2}
-	extrct3 := Extract{
-		Columns:     []int{7},
-		RegexString: `=([0-9\.]+)(^|\s+)`,
-		Token:       "={} ",
-		Submatch:    1}
-	scnr := openFileScanner(filepath.Join(testDataDirectory, "test_extract.txt"), "", "",
-		delimiter, []*Replacement{{RegexString: `\s\s+`, Replacement: delimiterString}},
-		[]*Extract{&extrct1, &extrct2, &extrct3})
+
+	extracts := []*Extract{
+		{
+			// capture string that starts with alpha or number, and contains alpha, number, [_.-:], that has leading space delimited
+			Columns:     []int{7},
+			RegexString: "(^|\\s+)(([0-9]+[a-zA-Z_\\.-]|[a-zA-Z_\\.-]+[0-9])[a-zA-Z0-9\\.\\-_:]*)",
+			Token:       "${1}{}",
+			Submatch:    2,
+		},
+		{
+			// capture word or [\\._] preceeded by' word='
+			Columns:     []int{7},
+			RegexString: "(^|\\s+)([\\w]+[:=])([\\w:\\._]+)",
+			Token:       "${1}${2}{}",
+			Submatch:    3,
+		},
+		{
+			// capture word or [\\.] in paretheses
+			Columns:     []int{7},
+			RegexString: "(\\()([\\w:\\.]+)(\\))",
+			Token:       "${1}{}${3}",
+			Submatch:    2,
+		},
+		{
+			// capture hex number preceeded by space
+			Columns:     []int{7},
+			RegexString: "(^|\\s+)(0x[a-fA-F0-9]+)",
+			Token:       "${1}{}",
+			Submatch:    2,
+		},
+		{
+			// capture number and [\\.:_] preceeded by space
+			Columns:     []int{7},
+			RegexString: "(^|\\s+)([0-9\\.:_]+)",
+			Token:       "${1}{}",
+			Submatch:    2,
+		},
+	}
+	inputs := defaultInputs
+	inputs.Delimiter = delimiter
+	inputs.Replacements = []*Replacement{{RegexString: `\s\s+`, Replacement: delimiterString}}
+	inputs.Extracts = extracts
+	scnr := openFileScanner(filepath.Join(testDataDirectory, "test_extract.txt"), inputs)
 	dataChan, errorChan := scnr.Read(100, 100)
 	fullData := []string{}
 	extractData := []string{}
@@ -330,16 +372,16 @@ func ExampleScanner_Extract_andHash() {
 	// Output:
 	//
 	// Input data:
-	// 2023-10-07 12:00:00.00 MDT|0|0|notification|debug|multi word type|sw_a|Unit 12.Ab.34 message
-	// 2023-10-07 12:00:00.01 MDT|1|001|notification|info|SingleWordType|sw_b|Info SW version = 1.2.34 message
+	// 2023-10-07 12:00:00.00 MDT|0|0|notification|debug|multi word type|sw_a|Unit 12.Ab.34 message (789)
+	// 2023-10-07 12:00:00.01 MDT|1|001|notification|info|SingleWordType|sw_b|Info SW version = 1.2.34 release=a.1.1
 	// 2023-10-07 12:00:00.02 MDT|1|002|status|info|alphanumeric value|sw_a|Message with alphanumberic value abc123def
-	// 2023-10-07 12:00:00.03 MDT|1|003|status|info|alphanumeric value|sw_a|val=1 flag = 20 other 3.AB
-	// 2023-10-07 12:00:00.03 MDT|1|003|status|info|alphanumeric value|sw_a|val=2 flag = 30 other 4.cd
+	// 2023-10-07 12:00:00.03 MDT|1|003|status|info|alphanumeric value|sw_a|val:1 flag:x20 other:X30 on 127.0.0.1:8080
+	// 2023-10-07 12:00:00.04 MDT|1|004|status|info|alphanumeric value|sw_a|val=2 flag = 30 other 4.cd on (ABC.123_45)
 	//
 	// Extract(ed) data:
-	// 2023-10-07 12:00:00.00 MDT|0|0|notification|debug|multi word type|sw_a|Unit {} message| extracts:12.Ab.34| hash:74ed0ffb5be98f93d2b9a2ca360e5ac3
-	// 2023-10-07 12:00:00.01 MDT|1|001|notification|info|SingleWordType|sw_b|Info SW version = {} message| extracts:1.2.34| hash:c7ea26ece6e34c6763e7df04341868ca
-	// 2023-10-07 12:00:00.02 MDT|1|002|status|info|alphanumeric value|sw_a|Message with alphanumberic value {} | extracts:abc123def| hash:b60cbe35cb07181c41758f3a1a6bb263
-	// 2023-10-07 12:00:00.03 MDT|1|003|status|info|alphanumeric value|sw_a|val={} flag = {} other {} | extracts:3.AB|20|1| hash:4cf1e01d8894ae26497d87b76f126ce9
-	// 2023-10-07 12:00:00.03 MDT|1|003|status|info|alphanumeric value|sw_a|val={} flag = {} other {} | extracts:4.cd|30|2| hash:4cf1e01d8894ae26497d87b76f126ce9
+	// 2023-10-07 12:00:00.00 MDT|0|0|notification|debug|multi word type|sw_a|Unit {} message ({})| extracts:12.Ab.34|789| hash:a5a3dba744d3c6f1372f888f54447553
+	// 2023-10-07 12:00:00.01 MDT|1|001|notification|info|SingleWordType|sw_b|Info SW version = {} release={}| extracts:1.2.34|a.1.1| hash:9bd3989cf85b232ddadd73a1a312b249
+	// 2023-10-07 12:00:00.02 MDT|1|002|status|info|alphanumeric value|sw_a|Message with alphanumberic value {}| extracts:abc123def| hash:7f0e8136c3aec6bbde74dfbad17aef1c
+	// 2023-10-07 12:00:00.03 MDT|1|003|status|info|alphanumeric value|sw_a|val:{} flag:{} other:{} on {}| extracts:127.0.0.1:8080|1|x20|X30| hash:4907fb17a4212e2e09897fafa1cb758a
+	// 2023-10-07 12:00:00.04 MDT|1|004|status|info|alphanumeric value|sw_a|val={} flag = {} other {} on ({})| extracts:4.cd|2|ABC.123_45|30| hash:1b7739c1e24d3a837e7821ecfb9a1be1
 }

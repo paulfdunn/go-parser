@@ -16,34 +16,38 @@ Example WITHOUT hashing:
 <font size=0.5em>
 ```
 go run ./main.go -datafile="./parser/test/test_extract.txt" -inputfile="exampleInput.json" -loglevel=0
-debug: user.Current(): &{Uid:501 Gid:20 Username:pauldunn Name:PAUL DUNN HomeDir:/Users/pauldunn}
-info: Data and logs being saved to directory: /Users/pauldunn/tmp/go-parser
-info: 2023-10-07 12:00:00.00 MDT|0|0|notification|debug|multi word type|sw_a|Unit {} message| extracts:12.Ab.34
-info: 2023-10-07 12:00:00.01 MDT|1|001|notification|info|SingleWordType|sw_b|Info SW version = {} message| extracts:1.2.34
-info: 2023-10-07 12:00:00.02 MDT|1|002|status|info|alphanumeric value|sw_a|Message with alphanumberic value {} | extracts:abc123def
-info: 2023-10-07 12:00:00.03 MDT|1|003|status|info|alphanumeric value|sw_a|val={} flag = {} other {} | extracts:3.AB|20|1
-info: 2023-10-07 12:00:00.03 MDT|1|003|status|info|alphanumeric value|sw_a|val={} flag = {} other {} | extracts:4.cd|30|2
-info: total lines with unexpected number of fields=0
+2023/10/11 18:13:17.526453 main.go:77:   debug: user.Current(): &{Uid:501 Gid:20 Username:pauldunn Name:PAUL DUNN HomeDir:/Users/pauldunn}
+2023/10/11 18:13:17.526490 main.go:78:    info: Data and logs being saved to directory: /Users/pauldunn/tmp/go-parser
+---------------- PARSED OUTPUT START ----------------
+2023-10-07 12:00:00.00 MDT|0|0|notification|debug|multi word type|sw_a|Unit {} message ({})| extracts:12.Ab.34|789
+2023-10-07 12:00:00.01 MDT|1|001|notification|info|SingleWordType|sw_b|Info SW version = {} release={}| extracts:1.2.34|a.1.1
+2023-10-07 12:00:00.02 MDT|1|002|status|info|alphanumeric value|sw_a|Message with alphanumberic value {}| extracts:abc123def
+2023-10-07 12:00:00.03 MDT|1|003|status|info|alphanumeric value|sw_a|val:{} flag:{} other:{} on {}| extracts:127.0.0.1:8080|1|x20|X30
+2023-10-07 12:00:00.04 MDT|1|004|status|info|alphanumeric value|sw_a|val={} flag = {} other {} on ({})| extracts:4.cd|2|ABC.123_45|30
+---------------- PARSED OUTPUT END   ----------------
+2023/10/11 18:13:17.527048 main.go:213:    info: total lines with unexpected number of fields=0
 ```
 </font>
 
 Example WITH hashing:
 <font size=0.5em>
 ```
-go run ./main.go -datafile="./parser/test/test_extract.txt" -inputfile="exampleInputWithHashing.json" -loglevel=0
-debug: user.Current(): &{Uid:501 Gid:20 Username:pauldunn Name:PAUL DUNN HomeDir:/Users/pauldunn}
-info: Data and logs being saved to directory: /Users/pauldunn/tmp/go-parser
-info: 2023-10-07 12:00:00.00 MDT|0|0|d4f074fb52bfb9641536b6af3f28309f| extracts:12.Ab.34
-info: 2023-10-07 12:00:00.01 MDT|1|001|fa3396c23df603e6f20cd904fb88a5e7| extracts:1.2.34
-info: 2023-10-07 12:00:00.02 MDT|1|002|d4e1f4a37b90a49b218859fc6706256e| extracts:abc123def
-info: 2023-10-07 12:00:00.03 MDT|1|003|aa3294bc37a046356dd9d1cb89152583| extracts:3.AB|20|1
-info: 2023-10-07 12:00:00.03 MDT|1|003|aa3294bc37a046356dd9d1cb89152583| extracts:4.cd|30|2
-info: len(hashCounts)=4
-debug: Hashes and counts:
-debug: hash: aa3294bc37a046356dd9d1cb89152583, count: 2, value: status|info|alphanumeric value|sw_a|val={} flag = {} other {} 
-debug: hash: d4f074fb52bfb9641536b6af3f28309f, count: 1, value: notification|debug|multi word type|sw_a|Unit {} message
-debug: hash: fa3396c23df603e6f20cd904fb88a5e7, count: 1, value: notification|info|SingleWordType|sw_b|Info SW version = {} message
-debug: hash: d4e1f4a37b90a49b218859fc6706256e, count: 1, value: status|info|alphanumeric value|sw_a|Message with alphanumberic value {} 
-info: total lines with unexpected number of fields=0
+2023/10/11 18:13:05.127175 main.go:77:   debug: user.Current(): &{Uid:501 Gid:20 Username:pauldunn Name:PAUL DUNN HomeDir:/Users/pauldunn}
+2023/10/11 18:13:05.127249 main.go:78:    info: Data and logs being saved to directory: /Users/pauldunn/tmp/go-parser
+---------------- PARSED OUTPUT START ----------------
+2023-10-07 12:00:00.00 MDT|0|0|de0ed065fd3509cd97c9adf2e161328a| extracts:12.Ab.34
+2023-10-07 12:00:00.01 MDT|1|001|dce435d44887b230dc76292ff915a541| extracts:1.2.34
+2023-10-07 12:00:00.02 MDT|1|002|d4e1f4a37b90a49b218859fc6706256e| extracts:abc123def
+2023-10-07 12:00:00.03 MDT|1|003|64d9ff35898788e8d8ba9cbbc1bb5b93| extracts:val:1|other:X30|127.0.0.1:8080
+2023-10-07 12:00:00.04 MDT|1|004|233979113ab07438302ab71511c5cfe0| extracts:4.cd|30|2
+---------------- PARSED OUTPUT END   ----------------
+2023/10/11 18:13:05.128343 main.go:207:    info: len(hashCounts)=5
+2023/10/11 18:13:05.128353 main.go:208:   debug: Hashes and counts:
+2023/10/11 18:13:05.128361 main.go:210:   debug: hash: de0ed065fd3509cd97c9adf2e161328a, count: 1, value: notification|debug|multi word type|sw_a|Unit {} message (789)
+2023/10/11 18:13:05.128370 main.go:210:   debug: hash: dce435d44887b230dc76292ff915a541, count: 1, value: notification|info|SingleWordType|sw_b|Info SW version = {} release=a.1.1
+2023/10/11 18:13:05.128377 main.go:210:   debug: hash: d4e1f4a37b90a49b218859fc6706256e, count: 1, value: status|info|alphanumeric value|sw_a|Message with alphanumberic value {} 
+2023/10/11 18:13:05.128383 main.go:210:   debug: hash: 64d9ff35898788e8d8ba9cbbc1bb5b93, count: 1, value: status|info|alphanumeric value|sw_a| {} flag:x20 {} on {} 
+2023/10/11 18:13:05.128390 main.go:210:   debug: hash: 233979113ab07438302ab71511c5cfe0, count: 1, value: status|info|alphanumeric value|sw_a|val={} flag = {} other {} on (ABC.123_45)
+2023/10/11 18:13:05.128397 main.go:213:    info: total lines with unexpected number of fields=0
 ```
 </font>

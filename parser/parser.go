@@ -18,12 +18,27 @@ import (
 // The RegexString is converted to a regex and is run against the specified data columns (after Split).
 // Submatches is used to index submatches returned from regex.FindAllStringSubmatch(regex,-1) which are
 // returned. The submatches are replaced with Token in the source data.
+// Note on submatch indexing: The first item is the full match, so submatch indeces start at 1
+// not zero (https://pkg.go.dev/regexp#Regexp.FindAllStringSubmatch)
 type Extract struct {
 	Columns     []int
 	RegexString string
 	Submatch    int
 	Token       string
 	regex       *regexp.Regexp
+}
+
+// Inputs to constructor for scanner.
+type Inputs struct {
+	Delimiter          string
+	DelimiterString    string
+	ExpectedFieldCount int
+	Extracts           []*Extract
+	HashColumns        []int
+	NegativeFilter     string
+	PositiveFilter     string
+	ProcessedDirectory string
+	Replacements       []*Replacement
 }
 
 // Replacement objects determine how replacements (Scanner.Replacement) occur.
@@ -182,47 +197,46 @@ func Hash(input string) string {
 
 // NewScanner is a constuctor for Scanners. See the Scanner definition for
 // a description of inputs.
-func NewScanner(negativeFilter string, positiveFilter string, delimiter string,
-	replace []*Replacement, extract []*Extract, processedDirectory string) (*Scanner, error) {
-	rgx, err := regexp.Compile(delimiter)
+func NewScanner(inputs Inputs) (*Scanner, error) {
+	rgx, err := regexp.Compile(inputs.Delimiter)
 	if err != nil {
 		return nil, err
 	}
 	scnr := &Scanner{delimiter: rgx}
 
-	err = scnr.setFilter(false, negativeFilter)
+	err = scnr.setFilter(false, inputs.NegativeFilter)
 	if err != nil {
 		return nil, err
 	}
-	err = scnr.setFilter(true, positiveFilter)
+	err = scnr.setFilter(true, inputs.PositiveFilter)
 	if err != nil {
 		return nil, err
 	}
 
-	scnr.replace = make([]*Replacement, len(replace))
-	for index := range replace {
-		scnr.replace[index] = replace[index]
-		rgx, err := regexp.Compile(replace[index].RegexString)
+	scnr.replace = make([]*Replacement, len(inputs.Replacements))
+	for index := range inputs.Replacements {
+		scnr.replace[index] = inputs.Replacements[index]
+		rgx, err := regexp.Compile(inputs.Replacements[index].RegexString)
 		if err != nil {
 			return nil, err
 		}
 		scnr.replace[index].regex = rgx
 	}
 
-	scnr.extract = make([]*Extract, len(extract))
-	for index := range extract {
-		scnr.extract[index] = extract[index]
-		rgx, err := regexp.Compile(extract[index].RegexString)
+	scnr.extract = make([]*Extract, len(inputs.Extracts))
+	for index := range inputs.Extracts {
+		scnr.extract[index] = inputs.Extracts[index]
+		rgx, err := regexp.Compile(inputs.Extracts[index].RegexString)
 		if err != nil {
 			return nil, err
 		}
 		scnr.extract[index].regex = rgx
 	}
 
-	if _, err := os.Stat(processedDirectory); processedDirectory != "" && os.IsNotExist(err) {
+	if _, err := os.Stat(inputs.ProcessedDirectory); inputs.ProcessedDirectory != "" && os.IsNotExist(err) {
 		return nil, fmt.Errorf("processedDirectory does not exist, error: %+v", err)
 	}
-	scnr.processedDirectory = processedDirectory
+	scnr.processedDirectory = inputs.ProcessedDirectory
 
 	return scnr, nil
 }
