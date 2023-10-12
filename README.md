@@ -15,7 +15,7 @@ You can also run the example app on one of the test files.
 Example WITHOUT hashing:
 <font size=0.5em>
 ```
-go run ./main.go -datafile="./parser/test/test_extract.txt" -inputfile="exampleInput.json" -loglevel=0                
+go run ./main.go -datafile="./parser/test/test_extract.txt" -inputfile="./inputs/exampleInput.json" -loglevel=0                
 2023/10/11 18:28:16.251709 main.go:77:   debug: user.Current(): &{Uid:501 Gid:20 Username:pauldunn Name:PAUL DUNN HomeDir:/Users/pauldunn}
 2023/10/11 18:28:16.251742 main.go:78:    info: Data and logs being saved to directory: /Users/pauldunn/tmp/go-parser
 ---------------- PARSED OUTPUT START ----------------
@@ -34,7 +34,7 @@ go run ./main.go -datafile="./parser/test/test_extract.txt" -inputfile="exampleI
 Example WITH hashing:
 <font size=0.5em>
 ```
-go run ./main.go -datafile="./parser/test/test_extract.txt" -inputfile="exampleInputWithHashing.json" -loglevel=0
+go run ./main.go -datafile="./parser/test/test_extract.txt" -inputfile="./inputs/exampleInputWithHashing.json" -loglevel=0
 2023/10/11 18:28:37.498537 main.go:77:   debug: user.Current(): &{Uid:501 Gid:20 Username:pauldunn Name:PAUL DUNN HomeDir:/Users/pauldunn}
 2023/10/11 18:28:37.498574 main.go:78:    info: Data and logs being saved to directory: /Users/pauldunn/tmp/go-parser
 ---------------- PARSED OUTPUT START ----------------

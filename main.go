@@ -1,3 +1,10 @@
+// Author: Paul F. Dunn, https://github.com/paulfdunn/
+// Original source location: https://github.com/paulfdunn/go-parser
+// This code is licensed under the MIT license. Please keep this attribution when
+// replicating/copying/reusing the code.
+//
+// This is a parsing application written using the go-parser package. Please see README.md
+// for information and the test files for working examples.
 package main
 
 import (
@@ -59,7 +66,7 @@ func main() {
 	}
 
 	dataFilePtr = flag.String("datafile", "", "Path to data file")
-	inputFilePtr = flag.String("inputfile", "", "Path to json file with inputs. See exampleInputs.json.")
+	inputFilePtr = flag.String("inputfile", "", "Path to json file with inputs. See ./inputs/exampleInputs.json.")
 	logFilePtr = flag.String("logfile", "", "Name of log file in "+dataDirectory+"; blank to print logs to terminal.")
 	logLevel = flag.Int("loglevel", int(logh.Info), fmt.Sprintf("Logging level; default %d. Zero based index into: %v",
 		int(logh.Info), logh.DefaultLevels))

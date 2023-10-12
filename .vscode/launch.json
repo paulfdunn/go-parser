@@ -10,7 +10,7 @@
             "request": "launch",
             "mode": "auto",
             "program": "${fileDirname}",
-            "args": [ "-datafile","./parser/test/test_extract.txt",  "-inputfile","./exampleInput.json"]
+            "args": [ "-datafile","./parser/test/test_extract.txt",  "-inputfile","./inputs/exampleInput.json"]
         }
     ]
 }

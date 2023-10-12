@@ -1,3 +1,7 @@
+// Author: Paul F. Dunn, https://github.com/paulfdunn/
+// Original source location: https://github.com/paulfdunn/go-parser
+// This code is licensed under the MIT license. Please keep this attribution when
+// replicating/copying/reusing the code.
 package parser
 
 import (

@@ -1,3 +1,8 @@
+// Author: Paul F. Dunn, https://github.com/paulfdunn/
+// Original source location: https://github.com/paulfdunn/go-parser
+// This code is licensed under the MIT license. Please keep this attribution when
+// replicating/copying/reusing the code.
+//
 // Package parser was written to support parsing of log files that were written
 // for human consumption and are generally difficult to parse. See the associtated
 // test file for comments and examples with output.
