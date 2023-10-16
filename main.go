@@ -24,7 +24,8 @@ import (
 )
 
 const (
-	outputFileSuffix = ".parsed.txt"
+	hashesOutputFileSuffix = ".hashes.txt"
+	parsedOutputFileSuffix = ".parsed.txt"
 )
 
 var (
@@ -79,8 +80,8 @@ func main() {
 	flag.Usage = func() {
 		w := flag.CommandLine.Output()
 		fmt.Fprintf(w, "Usage of %s: note that parsed output will be written to %s, "+
-			"using the input file name with '%s' appended as a file suffix \n",
-			os.Args[0], dataDirectory, outputFileSuffix)
+			"using the data file name with '%s' appended as a file suffix \n",
+			os.Args[0], dataDirectory, parsedOutputFileSuffix)
 		flag.PrintDefaults()
 	}
 	flag.Parse()
@@ -107,7 +108,7 @@ func main() {
 	inputs := parser.Inputs{}
 	err = json.Unmarshal(inputBytes, &inputs)
 	if err != nil {
-		lpf(logh.Error, "unmarshaling JSON input file: %+v", err)
+		lpf(logh.Error, "unmarshalling JSON input file: %+v", err)
 		logh.ShutdownAll()
 		os.Exit(5)
 	}
@@ -124,14 +125,26 @@ func main() {
 		os.Exit(13)
 	}
 
-	// Open output file
-	outputFile, err := os.Create(filepath.Join(dataDirectory, filepath.Base(*inputFilePtr)+outputFileSuffix))
+	// Open output files
+	hashesOutputFilePath := filepath.Join(dataDirectory, filepath.Base(*dataFilePtr)+hashesOutputFileSuffix)
+	hashesOutputFile, err := os.Create(hashesOutputFilePath)
+	defer hashesOutputFile.Close()
+	lpf(logh.Info, "hashes output file: %s", hashesOutputFilePath)
 	if err != nil {
 		lpf(logh.Error, "calling os.Create: %s", err)
 		os.Exit(17)
 	}
-	defer outputFile.Close()
-	outputWriter := bufio.NewWriter(outputFile)
+	defer hashesOutputFile.Close()
+	parsedOutputFilePath := filepath.Join(dataDirectory, filepath.Base(*dataFilePtr)+parsedOutputFileSuffix)
+	parsedOutputFile, err := os.Create(parsedOutputFilePath)
+	defer parsedOutputFile.Close()
+	lpf(logh.Info, "parsed output file: %s", parsedOutputFilePath)
+	if err != nil {
+		lpf(logh.Error, "calling os.Create: %s", err)
+		os.Exit(17)
+	}
+	defer parsedOutputFile.Close()
+	outputWriter := bufio.NewWriter(parsedOutputFile)
 	defer outputWriter.Flush()
 
 	// Process all data.
@@ -197,15 +210,15 @@ func main() {
 				splitsExcludeHashColumns = append(splitsExcludeHashColumns, splits[i])
 			}
 
+			out := strings.Join(splitsExcludeHashColumns, *outputDelimiterPtr) + "|EXTRACTS|" + strings.Join(extracts, *outputDelimiterPtr)
+			outputWriter.WriteString(out + "\n")
 			if *stdoutPtr {
-				out := strings.Join(splitsExcludeHashColumns, *outputDelimiterPtr) + "|EXTRACTS|" + strings.Join(extracts, *outputDelimiterPtr)
-				outputWriter.WriteString(out + "\n")
 				fmt.Println(out)
 			}
 		} else {
+			out := strings.Join(splits, *outputDelimiterPtr) + "|EXTRACTS|" + strings.Join(extracts, *outputDelimiterPtr)
+			outputWriter.WriteString(out + "\n")
 			if *stdoutPtr {
-				out := strings.Join(splits, *outputDelimiterPtr) + "|EXTRACTS|" + strings.Join(extracts, *outputDelimiterPtr)
-				outputWriter.WriteString(out + "\n")
 				fmt.Println(out)
 			}
 		}
@@ -228,6 +241,11 @@ func main() {
 		lpf(logh.Debug, "Hashes and counts:")
 		for _, v := range sortedHashKeys {
 			lpf(logh.Debug, "hash: %s, count: %d, value: %s", v, hashCounts[v], hashMap[v])
+			out := strings.Join([]string{v, hashMap[v]}, *outputDelimiterPtr)
+			_, err := hashesOutputFile.WriteString(out + "\n")
+			if err != nil {
+				lpf(logh.Error, "calling hashesOutputFile.WriteString: %s", err)
+			}
 		}
 	}
 	lpf(logh.Info, "total lines with unexpected number of fields=%d", unexpectedFieldCount)
