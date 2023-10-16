@@ -23,6 +23,10 @@ import (
 	"github.com/paulfdunn/logh"
 )
 
+const (
+	outputFileSuffix = ".parsed.txt"
+)
+
 var (
 	appName = "go-parser"
 
@@ -71,7 +75,14 @@ func main() {
 	logLevel = flag.Int("loglevel", int(logh.Info), fmt.Sprintf("Logging level; default %d. Zero based index into: %v",
 		int(logh.Info), logh.DefaultLevels))
 	outputDelimiterPtr = flag.String("outputdelimiter", "|", "Delimiter used for output.")
-	stdoutPtr = flag.Bool("stdout", true, "Output parsed data to STDOUT")
+	stdoutPtr = flag.Bool("stdout", true, "Output parsed data to STDOUT (in addition to file output)")
+	flag.Usage = func() {
+		w := flag.CommandLine.Output()
+		fmt.Fprintf(w, "Usage of %s: note that parsed output will be written to %s, "+
+			"using the input file name with '%s' appended as a file suffix \n",
+			os.Args[0], dataDirectory, outputFileSuffix)
+		flag.PrintDefaults()
+	}
 	flag.Parse()
 
 	// Setup logging.
@@ -114,7 +125,7 @@ func main() {
 	}
 
 	// Open output file
-	outputFile, err := os.Create(filepath.Join(dataDirectory, filepath.Base(*inputFilePtr)+".parsed.txt"))
+	outputFile, err := os.Create(filepath.Join(dataDirectory, filepath.Base(*inputFilePtr)+outputFileSuffix))
 	if err != nil {
 		lpf(logh.Error, "calling os.Create: %s", err)
 		os.Exit(17)
