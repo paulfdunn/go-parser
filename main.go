@@ -25,6 +25,7 @@ import (
 
 const (
 	hashesOutputFileSuffix = ".hashes.txt"
+	hashesOutputDelimiter  = "^"
 	parsedOutputFileSuffix = ".parsed.txt"
 )
 
@@ -32,12 +33,12 @@ var (
 	appName = "go-parser"
 
 	// CLI flags
-	dataFilePtr        *string
-	inputFilePtr       *string
-	logFilePtr         *string
-	logLevel           *int
-	outputDelimiterPtr *string
-	stdoutPtr          *bool
+	dataFilePtr              *string
+	inputFilePtr             *string
+	logFilePtr               *string
+	logLevel                 *int
+	parsedOutputDelimiterPtr *string
+	stdoutPtr                *bool
 
 	// dataDirectorySuffix is appended to the users home directory.
 	dataDirectorySuffix = filepath.Join(`tmp`, appName)
@@ -75,7 +76,7 @@ func main() {
 	logFilePtr = flag.String("logfile", "", "Name of log file in "+dataDirectory+"; blank to print logs to terminal.")
 	logLevel = flag.Int("loglevel", int(logh.Info), fmt.Sprintf("Logging level; default %d. Zero based index into: %v",
 		int(logh.Info), logh.DefaultLevels))
-	outputDelimiterPtr = flag.String("outputdelimiter", "|", "Delimiter used for output.")
+	parsedOutputDelimiterPtr = flag.String("parseddelimiter", "|", "Delimiter used for parsed output.")
 	stdoutPtr = flag.Bool("stdout", true, "Output parsed data to STDOUT (in addition to file output)")
 	flag.Usage = func() {
 		w := flag.CommandLine.Output()
@@ -173,7 +174,7 @@ func main() {
 		splits := scnr.Split(row)
 		if len(splits) != inputs.ExpectedFieldCount {
 			unexpectedFieldCount++
-			lp(logh.Error, fmt.Sprintf("field count=%d|", len(splits))+strings.Join(splits, *outputDelimiterPtr))
+			lp(logh.Error, fmt.Sprintf("field count=%d|", len(splits))+strings.Join(splits, *parsedOutputDelimiterPtr))
 		}
 		extracts := scnr.Extract(splits)
 
@@ -183,7 +184,7 @@ func main() {
 			for _, v := range sortedHashColumns {
 				hashSplits = append(hashSplits, splits[v])
 			}
-			hashString := strings.Join(hashSplits, *outputDelimiterPtr)
+			hashString := strings.Join(hashSplits, *parsedOutputDelimiterPtr)
 			hash := parser.Hash(hashString)
 			hashMap[hash] = hashString
 			hashCounts[hash] += 1
@@ -210,13 +211,13 @@ func main() {
 				splitsExcludeHashColumns = append(splitsExcludeHashColumns, splits[i])
 			}
 
-			out := strings.Join(splitsExcludeHashColumns, *outputDelimiterPtr) + "|EXTRACTS|" + strings.Join(extracts, *outputDelimiterPtr)
+			out := strings.Join(splitsExcludeHashColumns, *parsedOutputDelimiterPtr) + "|EXTRACTS|" + strings.Join(extracts, *parsedOutputDelimiterPtr)
 			outputWriter.WriteString(out + "\n")
 			if *stdoutPtr {
 				fmt.Println(out)
 			}
 		} else {
-			out := strings.Join(splits, *outputDelimiterPtr) + "|EXTRACTS|" + strings.Join(extracts, *outputDelimiterPtr)
+			out := strings.Join(splits, *parsedOutputDelimiterPtr) + "|EXTRACTS|" + strings.Join(extracts, *parsedOutputDelimiterPtr)
 			outputWriter.WriteString(out + "\n")
 			if *stdoutPtr {
 				fmt.Println(out)
@@ -241,7 +242,7 @@ func main() {
 		lpf(logh.Debug, "Hashes and counts:")
 		for _, v := range sortedHashKeys {
 			lpf(logh.Debug, "hash: %s, count: %d, value: %s", v, hashCounts[v], hashMap[v])
-			out := strings.Join([]string{v, hashMap[v]}, *outputDelimiterPtr)
+			out := strings.Join([]string{v, hashMap[v]}, hashesOutputDelimiter)
 			_, err := hashesOutputFile.WriteString(out + "\n")
 			if err != nil {
 				lpf(logh.Error, "calling hashesOutputFile.WriteString: %s", err)
