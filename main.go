@@ -237,9 +237,9 @@ func main() {
 	if hashing {
 		sortedHashKeys := parser.SortedHashMapCounts(hashCounts)
 		lpf(logh.Info, "len(hashCounts)=%d", len(hashCounts))
-		lpf(logh.Debug, "Hashes and counts:")
+		lpf(logh.Info, "Hashes and counts:")
 		for _, v := range sortedHashKeys {
-			lpf(logh.Debug, "hash: %s, count: %d, value: %s", v, hashCounts[v], hashMap[v])
+			lpf(logh.Info, "hash: %s, count: %d, value: %s", v, hashCounts[v], hashMap[v])
 			out := strings.Join([]string{v, hashMap[v]}, hashesOutputDelimiter)
 			_, err := hashesOutputFile.WriteString(out + "\n")
 			if err != nil {

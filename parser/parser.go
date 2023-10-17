@@ -79,6 +79,10 @@ type Scanner struct {
 func (scnr *Scanner) Extract(row []string) []string {
 	var extracts []string
 	for _, extrct := range scnr.extract {
+		// Allow empty Extracts that just have comments
+		if extrct.RegexString == "" {
+			continue
+		}
 		for ec := range extrct.Columns {
 			if extrct.Columns[ec] >= len(row) {
 				continue
