@@ -1,6 +1,5 @@
 {
     "Delimiter": "\\s\\s",
-    "DelimiterString": "  ",
     "Extracts": [
         {
             "_comment": "capture string that starts with alpha or number, and contains alpha, number, [_.-:], that has leading space delimited",

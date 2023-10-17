@@ -16,7 +16,6 @@ import (
 var (
 	defaultInputs = Inputs{
 		Delimiter:          "",
-		DelimiterString:    "",
 		ExpectedFieldCount: 0,
 		Extracts:           []*Extract{},
 		HashColumns:        []int{},

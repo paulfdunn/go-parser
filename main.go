@@ -129,7 +129,6 @@ func main() {
 	// Open output files
 	hashesOutputFilePath := filepath.Join(dataDirectory, filepath.Base(*dataFilePtr)+hashesOutputFileSuffix)
 	hashesOutputFile, err := os.Create(hashesOutputFilePath)
-	defer hashesOutputFile.Close()
 	lpf(logh.Info, "hashes output file: %s", hashesOutputFilePath)
 	if err != nil {
 		lpf(logh.Error, "calling os.Create: %s", err)
@@ -138,7 +137,6 @@ func main() {
 	defer hashesOutputFile.Close()
 	parsedOutputFilePath := filepath.Join(dataDirectory, filepath.Base(*dataFilePtr)+parsedOutputFileSuffix)
 	parsedOutputFile, err := os.Create(parsedOutputFilePath)
-	defer parsedOutputFile.Close()
 	lpf(logh.Info, "parsed output file: %s", parsedOutputFilePath)
 	if err != nil {
 		lpf(logh.Error, "calling os.Create: %s", err)
@@ -174,7 +172,7 @@ func main() {
 		splits := scnr.Split(row)
 		if len(splits) != inputs.ExpectedFieldCount {
 			unexpectedFieldCount++
-			lp(logh.Error, fmt.Sprintf("field count=%d|", len(splits))+strings.Join(splits, *parsedOutputDelimiterPtr))
+			lpf(logh.Error, "field count=%d, dataFile:%s, splits:%s", len(splits), *dataFilePtr, strings.Join(splits, *parsedOutputDelimiterPtr))
 		}
 		extracts := scnr.Extract(splits)
 

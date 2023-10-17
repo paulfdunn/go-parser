@@ -36,7 +36,6 @@ type Extract struct {
 // Inputs to constructor for scanner.
 type Inputs struct {
 	Delimiter          string
-	DelimiterString    string
 	ExpectedFieldCount int
 	Extracts           []*Extract
 	HashColumns        []int
@@ -56,14 +55,11 @@ type Replacement struct {
 }
 
 // Scanner is the main object of this package.
-// delimiter - Used by Split to split rows of data.
+// delimiter - Regexp used by Split to split rows of data.
 // extract - Extract objects; used for extracting values from rows into their own fields.
 // negativeFilter - Regex used for negative filtering. Rows matching this value are excluded.
-// processedDirectory - When Read completes, move the file to this directory; empty string
-//
-//	means the file is left in place.
-//
 // positiveFilter - Regex used for positive filtering. Rows must match to be included.
+// processedDirectory - When Read completes, move the file to this directory; empty string means the file is left in place.
 // replace - Replacement values used for performing regex replacements on input data.
 type Scanner struct {
 	dataChan           chan string
