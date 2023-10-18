@@ -15,6 +15,7 @@ import (
 	"os"
 	"os/user"
 	"path/filepath"
+	"regexp"
 	"runtime/debug"
 	"sort"
 	"strings"
@@ -38,6 +39,8 @@ var (
 	logFilePtr               *string
 	logLevel                 *int
 	parsedOutputDelimiterPtr *string
+	uniqueIdPtr              *string
+	uniqueIdRegexPtr         *string
 	stdoutPtr                *bool
 
 	// dataDirectorySuffix is appended to the users home directory.
@@ -72,6 +75,9 @@ func main() {
 	}
 
 	dataFilePtr = flag.String("datafile", "", "Path to data file")
+	uniqueIdPtr = flag.String("uniqueid", "", "Unique ID that is output with each parsed row.")
+	uniqueIdRegexPtr = flag.String("uniqueidregex", "", "Regex that will be called on the input data to find a unique ID that "+
+		"is output with each parsed row. Overrides uniqueid parameter")
 	inputFilePtr = flag.String("inputfile", "", "Path to json file with inputs. See ./inputs/exampleInputs.json.")
 	logFilePtr = flag.String("logfile", "", "Name of log file in "+dataDirectory+"; blank to print logs to terminal.")
 	logLevel = flag.Int("loglevel", int(logh.Info), fmt.Sprintf("Logging level; default %d. Zero based index into: %v",
@@ -158,11 +164,27 @@ func main() {
 		hashing = true
 	}
 
+	var uniqueId string
+	var uniqueIdRegex *regexp.Regexp
+	if uniqueIdRegexPtr != nil {
+		uniqueIdRegex = regexp.MustCompile(*uniqueIdRegexPtr)
+	} else if uniqueIdPtr != nil {
+		uniqueId = *uniqueIdPtr
+		lpf(logh.Info, "UniqueID from inuput: %s", uniqueId)
+	}
 	if *stdoutPtr {
 		fmt.Println("---------------- PARSED OUTPUT START ----------------")
 	}
 
 	for row := range dataChan {
+		if uniqueId == "" && uniqueIdRegex != nil {
+			match := uniqueIdRegex.FindStringSubmatch(row)
+			if match != nil {
+				uniqueId = match[1]
+				lpf(logh.Info, "UniqueID found via regex: %s", uniqueId)
+			}
+		}
+
 		if scnr.Filter(row) {
 			continue
 		}
@@ -212,13 +234,15 @@ func main() {
 				splitsExcludeHashColumns = append(splitsExcludeHashColumns, splits[i])
 			}
 
-			out := strings.Join(splitsExcludeHashColumns, *parsedOutputDelimiterPtr) + "|EXTRACTS|" + strings.Join(extracts, *parsedOutputDelimiterPtr)
+			out := uniqueId + *parsedOutputDelimiterPtr +
+				strings.Join(splitsExcludeHashColumns, *parsedOutputDelimiterPtr) + "|EXTRACTS|" + strings.Join(extracts, *parsedOutputDelimiterPtr)
 			outputWriter.WriteString(out + "\n")
 			if *stdoutPtr {
 				fmt.Println(out)
 			}
 		} else {
-			out := strings.Join(splits, *parsedOutputDelimiterPtr) + "|EXTRACTS|" + strings.Join(extracts, *parsedOutputDelimiterPtr)
+			out := uniqueId + *parsedOutputDelimiterPtr +
+				strings.Join(splits, *parsedOutputDelimiterPtr) + "|EXTRACTS|" + strings.Join(extracts, *parsedOutputDelimiterPtr)
 			outputWriter.WriteString(out + "\n")
 			if *stdoutPtr {
 				fmt.Println(out)
