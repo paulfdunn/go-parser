@@ -358,7 +358,7 @@ func ExampleScanner_Extract_andHash() {
 	for row := range dataChan {
 		splits := scnr.Split(row)
 		fullData = append(fullData, strings.Join(splits, "|"))
-		extracts := scnr.Extract(splits)
+		extracts, _ := scnr.Extract(splits)
 		extractData = append(extractData, strings.Join(splits, "|")+
 			"|EXTRACTS|"+strings.Join(extracts, "|")+
 			"| hash:"+Hash(splits[3]+splits[4]+splits[5]+splits[7]))

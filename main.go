@@ -25,7 +25,7 @@ import (
 
 const (
 	hashesOutputFileSuffix = ".hashes.txt"
-	hashesOutputDelimiter  = "^"
+	hashesOutputDelimiter  = "|"
 	parsedOutputFileSuffix = ".parsed.txt"
 )
 
@@ -93,7 +93,7 @@ func main() {
 		logFilepath = filepath.Join(dataDirectory, *logFilePtr)
 	}
 	logh.New(appName, logFilepath, logh.DefaultLevels, logh.LoghLevel(*logLevel),
-		logh.DefaultFlags, 100, int64(10e6))
+		logh.DefaultFlags, 100, int64(100e6))
 	lp := logh.Map[appName].Println
 	lpf := logh.Map[appName].Printf
 	lpf(logh.Debug, "user.Current(): %+v", usr)
@@ -174,7 +174,10 @@ func main() {
 			unexpectedFieldCount++
 			lpf(logh.Error, "field count=%d, dataFile:%s, splits:%s", len(splits), *dataFilePtr, strings.Join(splits, *parsedOutputDelimiterPtr))
 		}
-		extracts := scnr.Extract(splits)
+		extracts, errors := scnr.Extract(splits)
+		for _, errs := range errors {
+			lpf(logh.Warning, "%+v", errs)
+		}
 
 		if hashing {
 			// Create the hash
@@ -183,7 +186,7 @@ func main() {
 				hashSplits = append(hashSplits, splits[v])
 			}
 			hashString := strings.Join(hashSplits, *parsedOutputDelimiterPtr)
-			hash := parser.Hash(hashString)
+			hash := "0x" + parser.Hash(hashString)
 			hashMap[hash] = hashString
 			hashCounts[hash] += 1
 

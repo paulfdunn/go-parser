@@ -76,8 +76,9 @@ type Scanner struct {
 
 // Extract takes an input row slice (call Split to split a row on scnr.delimiter)
 // and applies the scnr.extract values to extract values from a column.
-func (scnr *Scanner) Extract(row []string) []string {
+func (scnr *Scanner) Extract(row []string) ([]string, []error) {
 	var extracts []string
+	errors := make([]error, 0)
 	for _, extrct := range scnr.extract {
 		// Allow empty Extracts that just have comments
 		if extrct.RegexString == "" {
@@ -91,6 +92,8 @@ func (scnr *Scanner) Extract(row []string) []string {
 			sbms := extrct.regex.FindAllStringSubmatch(row[extrct.Columns[ec]], -1)
 			for _, sbm := range sbms {
 				if extrct.Submatch >= len(sbm) {
+					errors = append(errors, fmt.Errorf("submatch index %d out of range for submatches:%+v, regex: %s",
+						extrct.Submatch, sbm, extrct.RegexString))
 					continue
 				}
 				extracts = append(extracts, sbm[extrct.Submatch])
@@ -99,7 +102,7 @@ func (scnr *Scanner) Extract(row []string) []string {
 		}
 	}
 
-	return extracts
+	return extracts, errors
 }
 
 // Filter takes in input row and applies the scnr.negativeFilter and
