@@ -25,14 +25,14 @@ import (
 )
 
 const (
+	appName = "go-parser"
+
 	hashesOutputFileSuffix = ".hashes.txt"
 	hashesOutputDelimiter  = "|"
 	parsedOutputFileSuffix = ".parsed.txt"
 )
 
 var (
-	appName = "go-parser"
-
 	// CLI flags
 	dataFilePtr              *string
 	inputFilePtr             *string
@@ -166,11 +166,12 @@ func main() {
 
 	var uniqueId string
 	var uniqueIdRegex *regexp.Regexp
-	if uniqueIdRegexPtr != nil {
+	if *uniqueIdRegexPtr != "" {
 		uniqueIdRegex = regexp.MustCompile(*uniqueIdRegexPtr)
-	} else if uniqueIdPtr != nil {
+	} else if *uniqueIdPtr != "" {
 		uniqueId = *uniqueIdPtr
-		lpf(logh.Info, "UniqueID from inuput: %s", uniqueId)
+		lpf(logh.Info, "UniqueID from input: %s", uniqueId)
+		uniqueId += *parsedOutputDelimiterPtr
 	}
 	if *stdoutPtr {
 		fmt.Println("---------------- PARSED OUTPUT START ----------------")
@@ -182,6 +183,7 @@ func main() {
 			if match != nil {
 				uniqueId = match[1]
 				lpf(logh.Info, "UniqueID found via regex: %s", uniqueId)
+				uniqueId += *parsedOutputDelimiterPtr
 			}
 		}
 
@@ -234,15 +236,13 @@ func main() {
 				splitsExcludeHashColumns = append(splitsExcludeHashColumns, splits[i])
 			}
 
-			out := uniqueId + *parsedOutputDelimiterPtr +
-				strings.Join(splitsExcludeHashColumns, *parsedOutputDelimiterPtr) + "|EXTRACTS|" + strings.Join(extracts, *parsedOutputDelimiterPtr)
+			out := uniqueId + strings.Join(splitsExcludeHashColumns, *parsedOutputDelimiterPtr) + "|EXTRACTS|" + strings.Join(extracts, *parsedOutputDelimiterPtr)
 			outputWriter.WriteString(out + "\n")
 			if *stdoutPtr {
 				fmt.Println(out)
 			}
 		} else {
-			out := uniqueId + *parsedOutputDelimiterPtr +
-				strings.Join(splits, *parsedOutputDelimiterPtr) + "|EXTRACTS|" + strings.Join(extracts, *parsedOutputDelimiterPtr)
+			out := uniqueId + strings.Join(splits, *parsedOutputDelimiterPtr) + "|EXTRACTS|" + strings.Join(extracts, *parsedOutputDelimiterPtr)
 			outputWriter.WriteString(out + "\n")
 			if *stdoutPtr {
 				fmt.Println(out)
