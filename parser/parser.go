@@ -11,6 +11,7 @@ package parser
 import (
 	"bufio"
 	"crypto/md5"
+	"encoding/json"
 	"fmt"
 	"io"
 	"os"
@@ -201,6 +202,21 @@ func Hash(input string) string {
 	h := md5.New()
 	io.WriteString(h, input)
 	return fmt.Sprintf("%x", h.Sum(nil))
+}
+
+// NewInputs unmarshalls a JSON file into a new Inputs object.
+func NewInputs(filePath string) (*Inputs, error) {
+	inputBytes, err := os.ReadFile(filePath)
+	if err != nil {
+		return nil, err
+	}
+	inputs := Inputs{}
+	err = json.Unmarshal(inputBytes, &inputs)
+	if err != nil {
+		return nil, err
+	}
+
+	return &inputs, nil
 }
 
 // NewScanner is a constuctor for Scanners. See the Scanner definition for

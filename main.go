@@ -9,7 +9,6 @@ package main
 
 import (
 	"bufio"
-	"encoding/json"
 	"flag"
 	"fmt"
 	"os"
@@ -114,23 +113,14 @@ func main() {
 
 // parseFile uses an input file from inputPath to process a data file from dataPath.
 func parseFile(inputPath string, dataPath string) {
-	// Read the input file.
-	inputBytes, err := os.ReadFile(inputPath)
+	inputs, err := parser.NewInputs(inputPath)
 	if err != nil {
-		lpf(logh.Error, "opening JSON input file: %+v", err)
-		logh.ShutdownAll()
-		os.Exit(1)
-	}
-	inputs := parser.Inputs{}
-	err = json.Unmarshal(inputBytes, &inputs)
-	if err != nil {
-		lpf(logh.Error, "unmarshalling JSON input file: %+v", err)
-		logh.ShutdownAll()
-		os.Exit(5)
+		lpf(logh.Error, "calling NewInputs: %s", err)
+		os.Exit(7)
 	}
 
 	// Create the scanner and open the file.
-	scnr, err := parser.NewScanner(inputs)
+	scnr, err := parser.NewScanner(*inputs)
 	if err != nil {
 		lpf(logh.Error, "calling NewScanner: %s", err)
 		os.Exit(9)
@@ -142,7 +132,7 @@ func parseFile(inputPath string, dataPath string) {
 	}
 
 	// Process all data.
-	processScanner(scnr, inputs, dataPath)
+	processScanner(scnr, *inputs, dataPath)
 	scnr.Shutdown()
 
 	logh.ShutdownAll()
