@@ -24,7 +24,8 @@ import (
 )
 
 const (
-	appName = "go-parser"
+	appName          = "go-parser"
+	lockedFileSuffix = "locked"
 
 	hashesOutputFileSuffix = ".hashes.txt"
 	hashesOutputDelimiter  = "|"
@@ -76,7 +77,7 @@ func main() {
 		fmt.Printf("Error creating data directory: : %+v", err)
 	}
 
-	dataFilePtr = flag.String("datafile", "", "Path to data file")
+	dataFilePtr = flag.String("datafile", "", "Path to data file. Overrides input file DataDirectory.")
 	uniqueIdPtr = flag.String("uniqueid", "", "Unique ID that is output with each parsed row.")
 	uniqueIdRegexPtr = flag.String("uniqueidregex", "", "Regex that will be called on the input data to find a unique ID that "+
 		"is output with each parsed row. Overrides uniqueid parameter")
@@ -108,50 +109,79 @@ func main() {
 	lpf(logh.Debug, "user.Current(): %+v", usr)
 	lpf(logh.Info, "Data and logs being saved to directory: %s", dataDirectory)
 
-	parseFile(*inputFilePtr, *dataFilePtr)
-}
-
-// parseFile uses an input file from inputPath to process a data file from dataPath.
-func parseFile(inputPath string, dataPath string) {
-	inputs, err := parser.NewInputs(inputPath)
+	inputs, err := parser.NewInputs(*inputFilePtr)
 	if err != nil {
 		lpf(logh.Error, "calling NewInputs: %s", err)
 		os.Exit(7)
 	}
 
+	if *dataFilePtr == "" && inputs.DataDirectory != "" {
+		if _, err := os.Stat(inputs.DataDirectory); os.IsNotExist(err) {
+			lpf(logh.Error, "inputs.DataDirectory does not exist: %+v", err)
+			os.Exit(5)
+		}
+
+		files, err := os.ReadDir(inputs.DataDirectory)
+		if err != nil {
+			lpf(logh.Error, "ReadDir error: %+v", err)
+			os.Exit(6)
+		}
+
+		for _, file := range files {
+			parseFile(inputs, filepath.Join(inputs.DataDirectory, file.Name()))
+		}
+
+	} else {
+		parseFile(inputs, *dataFilePtr)
+	}
+
+	logh.ShutdownAll()
+}
+
+// parseFile uses an input file from inputPath to process a data file from dataFilePath.
+// While the output files are being written the suffix is ".locked". When the files are fully
+// processed the ".locked" suffix is removed and callers can use the output files.
+func parseFile(inputs *parser.Inputs, dataFilePath string) {
+
 	// Create the scanner and open the file.
 	scnr, err := parser.NewScanner(*inputs)
 	if err != nil {
-		lpf(logh.Error, "calling NewScanner: %s", err)
+		lpf(logh.Error, "calling NewScanner: %+v", err)
 		os.Exit(9)
 	}
-	err = scnr.OpenFileScanner(dataPath)
+	err = scnr.OpenFileScanner(dataFilePath)
 	if err != nil {
-		lpf(logh.Error, "calling OpenScanner: %s", err)
+		lpf(logh.Error, "calling OpenScanner: %+v", err)
 		os.Exit(13)
 	}
 
 	// Process all data.
-	processScanner(scnr, *inputs, dataPath)
+	parsedOutputFilePath := filepath.Join(dataDirectory, filepath.Base(dataFilePath)+parsedOutputFileSuffix+lockedFileSuffix)
+	hashesOutputFilePath := filepath.Join(dataDirectory, filepath.Base(dataFilePath)+hashesOutputFileSuffix+lockedFileSuffix)
+	processScanner(scnr, dataFilePath, parsedOutputFilePath, hashesOutputFilePath)
 	scnr.Shutdown()
 
-	logh.ShutdownAll()
+	// Rename the output files, removing the lockedFileSuffix
+	parsedOutputFilePathUnlocked := filepath.Join(dataDirectory, filepath.Base(dataFilePath)+parsedOutputFileSuffix)
+	os.Rename(parsedOutputFilePath, parsedOutputFilePathUnlocked)
+	hashesOutputFilePathUnlocked := filepath.Join(dataDirectory, filepath.Base(dataFilePath)+hashesOutputFileSuffix)
+	os.Rename(hashesOutputFilePath, hashesOutputFilePathUnlocked)
 }
 
 // processScanner takes a scanner, (optionally) finds the unique ID in the input to append to each row,
 // then replaces, spits, extracts, and hashes all data from the scanner. The parsed data is
 // saved to the output, and  hashes saved to a seperate file.
-func processScanner(scnr *parser.Scanner, inputs parser.Inputs, dataPath string) {
+func processScanner(scnr *parser.Scanner, dataFilePath string,
+	parsedOutputFilePath string, hashesOutputFilePath string) {
 	hashMap := make(map[string]string)
 	hashCounts := make(map[string]int)
 
 	dataChan, errorChan := scnr.Read(100, 100)
 
-	parsedOutputFilePath := filepath.Join(dataDirectory, filepath.Base(dataPath)+parsedOutputFileSuffix)
 	parsedOutputFile, err := os.Create(parsedOutputFilePath)
 	lpf(logh.Info, "parsed output file: %s", parsedOutputFilePath)
 	if err != nil {
-		lpf(logh.Error, "calling os.Create: %s", err)
+		lpf(logh.Error, "calling os.Create: %+v", err)
 		os.Exit(17)
 	}
 	defer parsedOutputFile.Close()
@@ -159,14 +189,14 @@ func processScanner(scnr *parser.Scanner, inputs parser.Inputs, dataPath string)
 	defer outputWriter.Flush()
 
 	hashing := false
-	if inputs.HashColumns != nil && len(inputs.HashColumns) > 0 {
+	if scnr.HashColumns != nil && len(scnr.HashColumns) > 0 {
 		hashing = true
 	}
 
 	var uniqueId string
 	var uniqueIdRegex *regexp.Regexp
 	unexpectedFieldCount := 0
-	sortedHashColumns := sort.IntSlice(inputs.HashColumns)
+	sortedHashColumns := sort.IntSlice(scnr.HashColumns)
 	if *uniqueIdRegexPtr != "" {
 		uniqueIdRegex = regexp.MustCompile(*uniqueIdRegexPtr)
 	} else if *uniqueIdPtr != "" {
@@ -195,10 +225,10 @@ func processScanner(scnr *parser.Scanner, inputs parser.Inputs, dataPath string)
 
 		// Replace, split, and extract.
 		row = scnr.Replace(row)
-		splits := scnr.Split(row)
-		if len(splits) != inputs.ExpectedFieldCount {
+		splits, err := scnr.Split(row)
+		if err != nil {
 			unexpectedFieldCount++
-			lpf(logh.Error, "field count=%d, dataFile:%s, splits:%s", len(splits), *dataFilePtr, strings.Join(splits, *parsedOutputDelimiterPtr))
+			lpf(logh.Error, "%+v, splits:%s", err, strings.Join(splits, *parsedOutputDelimiterPtr))
 		}
 		extracts, errors := scnr.Extract(splits)
 		for _, errs := range errors {
@@ -231,14 +261,13 @@ func processScanner(scnr *parser.Scanner, inputs parser.Inputs, dataPath string)
 	}
 
 	if hashing {
-		saveHashes(hashCounts, hashMap, dataPath)
+		saveHashes(hashCounts, hashMap, hashesOutputFilePath, dataFilePath)
 	}
 }
 
 // saveHashes writes the hashes out to a file for later importing into a database.
-func saveHashes(hashCounts map[string]int, hashMap map[string]string, dataPath string) {
+func saveHashes(hashCounts map[string]int, hashMap map[string]string, hashesOutputFilePath string, dataFilePath string) {
 	// Open output files
-	hashesOutputFilePath := filepath.Join(dataDirectory, filepath.Base(dataPath)+hashesOutputFileSuffix)
 	hashesOutputFile, err := os.Create(hashesOutputFilePath)
 	lpf(logh.Info, "hashes output file: %s", hashesOutputFilePath)
 	if err != nil {

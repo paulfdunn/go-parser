@@ -262,11 +262,14 @@ func ExampleScanner_Replace() {
 
 // ExampleScanner_Split shows how to use the Split function. In this case the data is then
 // Join'ed back together just for output purposed.
+// Note that the call to Split drops the error that ExpectedFieldCount was incorrect.
+// callers can choose to enforce the error, or not.
 func ExampleScanner_Split() {
 	delimiter := `\s\s+`
 	delimiterString := "  "
 	inputs := defaultInputs
 	inputs.Delimiter = delimiter
+	inputs.ExpectedFieldCount = 8
 	inputs.Replacements = []*Replacement{{RegexString: `\s\s+`, Replacement: delimiterString}}
 	scnr := openFileScanner(filepath.Join(testDataDirectory, "test_split.txt"), inputs)
 	dataChan, errorChan := scnr.Read(100, 100)
@@ -274,7 +277,7 @@ func ExampleScanner_Split() {
 	splitData := []string{}
 	for row := range dataChan {
 		fullData = append(fullData, row)
-		splits := scnr.Split(row)
+		splits, _ := scnr.Split(row)
 		splitData = append(splitData, strings.Join(splits, "|"))
 	}
 	for err := range errorChan {
@@ -356,7 +359,7 @@ func ExampleScanner_Extract_andHash() {
 	fullData := []string{}
 	extractData := []string{}
 	for row := range dataChan {
-		splits := scnr.Split(row)
+		splits, _ := scnr.Split(row)
 		fullData = append(fullData, strings.Join(splits, "|"))
 		extracts, _ := scnr.Extract(splits)
 		extractData = append(extractData, strings.Join(splits, "|")+

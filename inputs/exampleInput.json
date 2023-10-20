@@ -1,4 +1,5 @@
 {
+    "DataDirectory": "/Users/pauldunn/go/src/github.com/paulfdunn/go-parser/parser/test",
     "Delimiter": "\\s\\s",
     "Extracts": [
         {

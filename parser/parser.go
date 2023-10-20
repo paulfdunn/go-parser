@@ -34,8 +34,10 @@ type Extract struct {
 	regex       *regexp.Regexp
 }
 
-// Inputs to constructor for scanner.
+// Inputs to parser. This object is just used for unmarshalling inputs from a file.
+// The values are then stored with the scanner.
 type Inputs struct {
+	DataDirectory      string
 	Delimiter          string
 	ExpectedFieldCount int
 	Extracts           []*Extract
@@ -56,16 +58,23 @@ type Replacement struct {
 }
 
 // Scanner is the main object of this package.
+// dataDirectory - Directory with input files.
 // delimiter - Regexp used by Split to split rows of data.
+// expectedFieldCount - Expected number of fields after calling Split.
 // extract - Extract objects; used for extracting values from rows into their own fields.
+// hashColumns - Column indeces of Split data used to create the hash.
 // negativeFilter - Regex used for negative filtering. Rows matching this value are excluded.
 // positiveFilter - Regex used for positive filtering. Rows must match to be included.
 // processedDirectory - When Read completes, move the file to this directory; empty string means the file is left in place.
 // replace - Replacement values used for performing regex replacements on input data.
 type Scanner struct {
+	HashColumns []int
+
 	dataChan           chan string
+	dataDirectory      string
 	delimiter          *regexp.Regexp
 	errorChan          chan error
+	expectedFieldCount int
 	extract            []*Extract
 	file               *os.File
 	negativeFilter     *regexp.Regexp
@@ -188,9 +197,15 @@ func (scnr *Scanner) Shutdown() {
 	}
 }
 
-// Split uses the scnr.delimiter to split the input data row.
-func (scnr *Scanner) Split(row string) []string {
-	return scnr.delimiter.Split(row, -1)
+// Split uses the scnr.delimiter to split the input data row. An error is returned if the
+// resulting number of splits is not equal to Inputs.ExpectedFieldCount. But the data is
+// returned and callers can choose to ignore the error if that is appropriate.
+func (scnr *Scanner) Split(row string) ([]string, error) {
+	splt := scnr.delimiter.Split(row, -1)
+	if len(splt) != scnr.expectedFieldCount {
+		return splt, fmt.Errorf("Split expectedFieldCount: %d, actual: %d", scnr.expectedFieldCount, len(splt))
+	}
+	return splt, nil
 }
 
 // Hash returns the hex string of the MD5 hash of the input. Call this on fields where
@@ -226,7 +241,12 @@ func NewScanner(inputs Inputs) (*Scanner, error) {
 	if err != nil {
 		return nil, err
 	}
-	scnr := &Scanner{delimiter: rgx}
+	scnr := &Scanner{
+		HashColumns:        inputs.HashColumns,
+		dataDirectory:      inputs.DataDirectory,
+		delimiter:          rgx,
+		expectedFieldCount: inputs.ExpectedFieldCount,
+	}
 
 	err = scnr.setFilter(false, inputs.NegativeFilter)
 	if err != nil {
