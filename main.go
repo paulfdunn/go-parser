@@ -142,25 +142,18 @@ func parseFile(inputPath string, dataPath string) {
 	}
 
 	// Process all data.
-	hashMap := make(map[string]string)
-	hashCounts := make(map[string]int)
-	hashing := false
-	if inputs.HashColumns != nil && len(inputs.HashColumns) > 0 {
-		hashing = true
-	}
-
-	processScanner(scnr, inputs, hashCounts, hashMap, hashing, dataPath)
+	processScanner(scnr, inputs, dataPath)
 	scnr.Shutdown()
 
-	if hashing {
-		saveHashes(hashCounts, hashMap, dataPath)
-	}
 	logh.ShutdownAll()
 }
 
-// processScanner
-func processScanner(scnr *parser.Scanner, inputs parser.Inputs,
-	hashCounts map[string]int, hashMap map[string]string, hashing bool, dataPath string) {
+// processScanner takes a scanner, (optionally) finds the unique ID in the input to append to each row,
+// then replaces, spits, extracts, and hashes all data from the scanner. The parsed data is
+// saved to the output, and  hashes saved to a seperate file.
+func processScanner(scnr *parser.Scanner, inputs parser.Inputs, dataPath string) {
+	hashMap := make(map[string]string)
+	hashCounts := make(map[string]int)
 
 	dataChan, errorChan := scnr.Read(100, 100)
 
@@ -174,6 +167,11 @@ func processScanner(scnr *parser.Scanner, inputs parser.Inputs,
 	defer parsedOutputFile.Close()
 	outputWriter := bufio.NewWriter(parsedOutputFile)
 	defer outputWriter.Flush()
+
+	hashing := false
+	if inputs.HashColumns != nil && len(inputs.HashColumns) > 0 {
+		hashing = true
+	}
 
 	var uniqueId string
 	var uniqueIdRegex *regexp.Regexp
@@ -218,7 +216,7 @@ func processScanner(scnr *parser.Scanner, inputs parser.Inputs,
 		}
 
 		if hashing {
-			sehc := splitsExcludeHashColumns(sortedHashColumns, splits, hashMap, hashCounts)
+			sehc := splitsExcludeHashColumns(sortedHashColumns, splits, hashCounts, hashMap)
 			out := uniqueId + strings.Join(sehc, *parsedOutputDelimiterPtr) + "|EXTRACTS|" + strings.Join(extracts, *parsedOutputDelimiterPtr)
 			outputWriter.WriteString(out + "\n")
 			if *stdoutPtr {
@@ -240,6 +238,10 @@ func processScanner(scnr *parser.Scanner, inputs parser.Inputs,
 
 	if *stdoutPtr {
 		fmt.Println("---------------- PARSED OUTPUT END   ----------------")
+	}
+
+	if hashing {
+		saveHashes(hashCounts, hashMap, dataPath)
 	}
 }
 
@@ -271,7 +273,7 @@ func saveHashes(hashCounts map[string]int, hashMap map[string]string, dataPath s
 // splitsExcludeHashColumns creates a version of splits that doesn't included the hash columns.
 // It also calculates the hash of splits and adds the hash to hashMap and hashCount
 func splitsExcludeHashColumns(sortedHashColumns []int, splits []string,
-	hashMap map[string]string, hashCounts map[string]int) []string {
+	hashCounts map[string]int, hashMap map[string]string) []string {
 	// Create the hash
 	hashSplits := make([]string, 0, len(sortedHashColumns))
 	for _, v := range sortedHashColumns {
