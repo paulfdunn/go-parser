@@ -11,6 +11,7 @@ import (
 	"bufio"
 	"flag"
 	"fmt"
+	"io/fs"
 	"os"
 	"os/user"
 	"path/filepath"
@@ -18,6 +19,7 @@ import (
 	"runtime/debug"
 	"sort"
 	"strings"
+	"sync"
 
 	"github.com/paulfdunn/go-parser/parser"
 	"github.com/paulfdunn/logh"
@@ -45,6 +47,7 @@ var (
 	uniqueIdPtr              *string
 	uniqueIdRegexPtr         *string
 	stdoutPtr                *bool
+	threadsPtr               *int
 
 	// dataDirectorySuffix is appended to the users home directory.
 	dataDirectorySuffix = filepath.Join(`tmp`, appName)
@@ -87,6 +90,7 @@ func main() {
 		int(logh.Info), logh.DefaultLevels))
 	parsedOutputDelimiterPtr = flag.String("parseddelimiter", "|", "Delimiter used for parsed output.")
 	stdoutPtr = flag.Bool("stdout", true, "Output parsed data to STDOUT (in addition to file output)")
+	threadsPtr = flag.Int("threads", 6, "Threads to use when processing a directory")
 	flag.Usage = func() {
 		w := flag.CommandLine.Output()
 		fmt.Fprintf(w, "Usage of %s: note that parsed output will be written to %s, "+
@@ -127,15 +131,60 @@ func main() {
 			os.Exit(6)
 		}
 
-		for _, file := range files {
-			parseFile(inputs, filepath.Join(inputs.DataDirectory, file.Name()))
-		}
+		parseFileEngine(inputs, files, *threadsPtr)
 
 	} else {
 		parseFile(inputs, *dataFilePtr)
 	}
 
 	logh.ShutdownAll()
+}
+
+// parseFileEngine will use Go routines to start multiple instances of parseFile.
+func parseFileEngine(inputs *parser.Inputs, fileList []fs.DirEntry, threads int) error {
+	tasks := make(chan string, threads)
+	// Make sure the error buffer cannot fill up and cause a deadlock.
+	// errorOut := make(chan error, threads)
+
+	// Start number of Go Routines that will call s3mftDownloadFile
+	var wg sync.WaitGroup
+	for i := 0; i < threads; i++ {
+		wg.Add(1)
+		go func() {
+			for file := range tasks {
+				parseFile(inputs, file)
+			}
+			wg.Done()
+		}()
+	}
+
+	// Read the download list, line by line, feeding work to the Go routines started above.
+	for _, file := range fileList {
+		fn := filepath.Join(inputs.DataDirectory, file.Name())
+		lpf(logh.Debug, "calling parseFile for file: %s", fn)
+		tasks <- fn
+
+		// Need to prevent the error channel from filling up and blocking
+		// DONE:
+		// 	for {
+		// 		select {
+		// 		case e := <-errorOut:
+		// 			lpf(logh.Error, "file download error: %+v", e)
+		// 		default:
+		// 			break DONE
+		// 		}
+		// 	}
+	}
+	close(tasks)
+
+	// Wait for all work to be done and see if there were errors
+	wg.Wait()
+	// close(errorOut)
+	// for e := range errorOut {
+	// 	lpf(logh.Error, "file download error: %+v", e)
+	// }
+
+	return nil
 }
 
 // parseFile uses an input file from inputPath to process a data file from dataFilePath.
