@@ -33,6 +33,9 @@ const (
 )
 
 var (
+	lp  func(logh.LoghLevel, ...any)
+	lpf func(logh.LoghLevel, string, ...any)
+
 	// CLI flags
 	dataFilePtr              *string
 	inputFilePtr             *string
@@ -100,13 +103,19 @@ func main() {
 	}
 	logh.New(appName, logFilepath, logh.DefaultLevels, logh.LoghLevel(*logLevel),
 		logh.DefaultFlags, 100, int64(100e6))
-	lp := logh.Map[appName].Println
-	lpf := logh.Map[appName].Printf
+	lp = logh.Map[appName].Println
+	lp(logh.Debug, "")
+	lpf = logh.Map[appName].Printf
 	lpf(logh.Debug, "user.Current(): %+v", usr)
 	lpf(logh.Info, "Data and logs being saved to directory: %s", dataDirectory)
 
-	// Process the input file.
-	inputBytes, err := os.ReadFile(*inputFilePtr)
+	parseFile(*inputFilePtr, *dataFilePtr)
+}
+
+// parseFile uses an input file from inputPath to process a data file from dataPath.
+func parseFile(inputPath string, dataPath string) {
+	// Read the input file.
+	inputBytes, err := os.ReadFile(inputPath)
 	if err != nil {
 		lpf(logh.Error, "opening JSON input file: %+v", err)
 		logh.ShutdownAll()
@@ -126,22 +135,36 @@ func main() {
 		lpf(logh.Error, "calling NewScanner: %s", err)
 		os.Exit(9)
 	}
-	err = scnr.OpenFileScanner(*dataFilePtr)
+	err = scnr.OpenFileScanner(dataPath)
 	if err != nil {
 		lpf(logh.Error, "calling OpenScanner: %s", err)
 		os.Exit(13)
 	}
 
-	// Open output files
-	hashesOutputFilePath := filepath.Join(dataDirectory, filepath.Base(*dataFilePtr)+hashesOutputFileSuffix)
-	hashesOutputFile, err := os.Create(hashesOutputFilePath)
-	lpf(logh.Info, "hashes output file: %s", hashesOutputFilePath)
-	if err != nil {
-		lpf(logh.Error, "calling os.Create: %s", err)
-		os.Exit(17)
+	// Process all data.
+	hashMap := make(map[string]string)
+	hashCounts := make(map[string]int)
+	hashing := false
+	if inputs.HashColumns != nil && len(inputs.HashColumns) > 0 {
+		hashing = true
 	}
-	defer hashesOutputFile.Close()
-	parsedOutputFilePath := filepath.Join(dataDirectory, filepath.Base(*dataFilePtr)+parsedOutputFileSuffix)
+
+	processScanner(scnr, inputs, hashCounts, hashMap, hashing, dataPath)
+	scnr.Shutdown()
+
+	if hashing {
+		saveHashes(hashCounts, hashMap, dataPath)
+	}
+	logh.ShutdownAll()
+}
+
+// processScanner
+func processScanner(scnr *parser.Scanner, inputs parser.Inputs,
+	hashCounts map[string]int, hashMap map[string]string, hashing bool, dataPath string) {
+
+	dataChan, errorChan := scnr.Read(100, 100)
+
+	parsedOutputFilePath := filepath.Join(dataDirectory, filepath.Base(dataPath)+parsedOutputFileSuffix)
 	parsedOutputFile, err := os.Create(parsedOutputFilePath)
 	lpf(logh.Info, "parsed output file: %s", parsedOutputFilePath)
 	if err != nil {
@@ -152,20 +175,10 @@ func main() {
 	outputWriter := bufio.NewWriter(parsedOutputFile)
 	defer outputWriter.Flush()
 
-	// Process all data.
-	dataChan, errorChan := scnr.Read(100, 100)
-	rows := 0
-	unexpectedFieldCount := 0
-	hashMap := make(map[string]string)
-	hashCounts := make(map[string]int)
-	sortedHashColumns := sort.IntSlice(inputs.HashColumns)
-	hashing := false
-	if inputs.HashColumns != nil && len(inputs.HashColumns) > 0 {
-		hashing = true
-	}
-
 	var uniqueId string
 	var uniqueIdRegex *regexp.Regexp
+	unexpectedFieldCount := 0
+	sortedHashColumns := sort.IntSlice(inputs.HashColumns)
 	if *uniqueIdRegexPtr != "" {
 		uniqueIdRegex = regexp.MustCompile(*uniqueIdRegexPtr)
 	} else if *uniqueIdPtr != "" {
@@ -173,6 +186,7 @@ func main() {
 		lpf(logh.Info, "UniqueID from input: %s", uniqueId)
 		uniqueId += *parsedOutputDelimiterPtr
 	}
+
 	if *stdoutPtr {
 		fmt.Println("---------------- PARSED OUTPUT START ----------------")
 	}
@@ -204,39 +218,8 @@ func main() {
 		}
 
 		if hashing {
-			// Create the hash
-			hashSplits := make([]string, 0, len(sortedHashColumns))
-			for _, v := range sortedHashColumns {
-				hashSplits = append(hashSplits, splits[v])
-			}
-			hashString := strings.Join(hashSplits, *parsedOutputDelimiterPtr)
-			hash := "0x" + parser.Hash(hashString)
-			hashMap[hash] = hashString
-			hashCounts[hash] += 1
-
-			// Create a version of splits that doesn't included the hash columns.
-			// The idea is to substitute multiple columns with the hash.
-			// Make a copy of sortedHashColumns that is used to create a list of splits
-			// that don't include hash columns.
-			shc := make([]int, len(sortedHashColumns))
-			copy(shc, sortedHashColumns)
-			splitsExcludeHashColumns := make([]string, 0, len(splits)-len(sortedHashColumns)+1)
-			hashInserted := false
-			for i := range splits {
-				if len(shc) > 0 {
-					if i == shc[0] {
-						if !hashInserted {
-							hashInserted = true
-							splitsExcludeHashColumns = append(splitsExcludeHashColumns, hash)
-						}
-						shc = shc[1:]
-						continue
-					}
-				}
-				splitsExcludeHashColumns = append(splitsExcludeHashColumns, splits[i])
-			}
-
-			out := uniqueId + strings.Join(splitsExcludeHashColumns, *parsedOutputDelimiterPtr) + "|EXTRACTS|" + strings.Join(extracts, *parsedOutputDelimiterPtr)
+			sehc := splitsExcludeHashColumns(sortedHashColumns, splits, hashMap, hashCounts)
+			out := uniqueId + strings.Join(sehc, *parsedOutputDelimiterPtr) + "|EXTRACTS|" + strings.Join(extracts, *parsedOutputDelimiterPtr)
 			outputWriter.WriteString(out + "\n")
 			if *stdoutPtr {
 				fmt.Println(out)
@@ -248,32 +231,81 @@ func main() {
 				fmt.Println(out)
 			}
 		}
-
-		rows++
-	}
-	scnr.Shutdown()
-
-	if *stdoutPtr {
-		fmt.Println("---------------- PARSED OUTPUT END   ----------------")
 	}
 
+	lpf(logh.Info, "total lines with unexpected number of fields=%d", unexpectedFieldCount)
 	for err := range errorChan {
 		lp(logh.Error, err)
 	}
 
-	if hashing {
-		sortedHashKeys := parser.SortedHashMapCounts(hashCounts)
-		lpf(logh.Info, "len(hashCounts)=%d", len(hashCounts))
-		lpf(logh.Info, "Hashes and counts:")
-		for _, v := range sortedHashKeys {
-			lpf(logh.Info, "hash: %s, count: %d, value: %s", v, hashCounts[v], hashMap[v])
-			out := strings.Join([]string{v, hashMap[v]}, hashesOutputDelimiter)
-			_, err := hashesOutputFile.WriteString(out + "\n")
-			if err != nil {
-				lpf(logh.Error, "calling hashesOutputFile.WriteString: %s", err)
-			}
+	if *stdoutPtr {
+		fmt.Println("---------------- PARSED OUTPUT END   ----------------")
+	}
+}
+
+// saveHashes writes the hashes out to a file for later importing into a database.
+func saveHashes(hashCounts map[string]int, hashMap map[string]string, dataPath string) {
+	// Open output files
+	hashesOutputFilePath := filepath.Join(dataDirectory, filepath.Base(dataPath)+hashesOutputFileSuffix)
+	hashesOutputFile, err := os.Create(hashesOutputFilePath)
+	lpf(logh.Info, "hashes output file: %s", hashesOutputFilePath)
+	if err != nil {
+		lpf(logh.Error, "calling os.Create: %s", err)
+		os.Exit(17)
+	}
+	defer hashesOutputFile.Close()
+
+	sortedHashKeys := parser.SortedHashMapCounts(hashCounts)
+	lpf(logh.Info, "len(hashCounts)=%d", len(hashCounts))
+	lpf(logh.Info, "Hashes and counts:")
+	for _, v := range sortedHashKeys {
+		lpf(logh.Info, "hash: %s, count: %d, value: %s", v, hashCounts[v], hashMap[v])
+		out := strings.Join([]string{v, hashMap[v]}, hashesOutputDelimiter)
+		_, err := hashesOutputFile.WriteString(out + "\n")
+		if err != nil {
+			lpf(logh.Error, "calling hashesOutputFile.WriteString: %s", err)
 		}
 	}
-	lpf(logh.Info, "total lines with unexpected number of fields=%d", unexpectedFieldCount)
-	logh.ShutdownAll()
+}
+
+// splitsExcludeHashColumns creates a version of splits that doesn't included the hash columns.
+// It also calculates the hash of splits and adds the hash to hashMap and hashCount
+func splitsExcludeHashColumns(sortedHashColumns []int, splits []string,
+	hashMap map[string]string, hashCounts map[string]int) []string {
+	// Create the hash
+	hashSplits := make([]string, 0, len(sortedHashColumns))
+	for _, v := range sortedHashColumns {
+		hashSplits = append(hashSplits, splits[v])
+	}
+	hashString := strings.Join(hashSplits, *parsedOutputDelimiterPtr)
+	hash := "0x" + parser.Hash(hashString)
+	hashMap[hash] = hashString
+	hashCounts[hash] += 1
+
+	// Create a version of splits that doesn't included the hash columns.
+	// The idea is to substitute multiple columns with the hash.
+	// Make a copy of sortedHashColumns that is used to create a list of splits
+	// that don't include hash columns.
+	shc := make([]int, len(sortedHashColumns))
+	copy(shc, sortedHashColumns)
+	splitsExcludeHashColumns := make([]string, 0, len(splits)-len(sortedHashColumns)+1)
+	hashInserted := false
+	for i := range splits {
+		if len(shc) > 0 {
+			// Check each index in splits. If the index is in the slice of (sorted) hashed
+			// columns, don't include the split in the return data.
+			// The hash is inserted at the first hashed (dropped) column.
+			if i == shc[0] {
+				if !hashInserted {
+					hashInserted = true
+					splitsExcludeHashColumns = append(splitsExcludeHashColumns, hash)
+				}
+				shc = shc[1:]
+				continue
+			}
+		}
+		splitsExcludeHashColumns = append(splitsExcludeHashColumns, splits[i])
+	}
+
+	return splitsExcludeHashColumns
 }
