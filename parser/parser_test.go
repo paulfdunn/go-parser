@@ -14,17 +14,6 @@ import (
 )
 
 var (
-	defaultInputs = Inputs{
-		InputDelimiter:          "",
-		ExpectedFieldCount:      0,
-		Extracts:                []*Extract{},
-		HashColumns:             []int{},
-		NegativeFilter:          "",
-		PositiveFilter:          "",
-		ProcessedInputDirectory: "",
-		Replacements:            []*Replacement{},
-	}
-
 	wd, _             = os.Getwd()
 	testDataDirectory = filepath.Join(wd, "./test")
 )
