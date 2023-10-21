@@ -36,7 +36,7 @@ type Extract struct {
 }
 
 // Inputs to parser. This object is just used for unmarshalling inputs from a file.
-// The values are then stored with the scanner.
+// The values are then stored with the scanner; see Scanner for details.
 type Inputs struct {
 	DataDirectory           string
 	ExpectedFieldCount      int

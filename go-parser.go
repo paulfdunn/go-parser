@@ -21,6 +21,7 @@ import (
 	"runtime/debug"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/paulfdunn/go-parser/parser"
 	"github.com/paulfdunn/logh"
@@ -125,6 +126,7 @@ func main() {
 		os.Exit(7)
 	}
 
+	// The `datafile` CLI parameter overrides the Inputs.DataDirectory.
 	if *dataFilePtr == "" && inputs.DataDirectory != "" {
 		if _, err := os.Stat(inputs.DataDirectory); os.IsNotExist(err) {
 			lpf(logh.Error, "inputs.DataDirectory does not exist: %+v", err)
@@ -137,16 +139,31 @@ func main() {
 			os.Exit(6)
 		}
 
-		parseFileEngine(inputs, files, *threadsPtr, *sqlite3FilePtr, *sqlite3DataTablePtr, *sqlite3HashTablePtr)
+		// If inputs.ProcessedInputDirectory is empty, only process the DataDirectory once.
+		// Otherwise watch the DataDirectory, forever.
+		loops := 0
+		for {
+			parseFileEngine(inputs, files, *threadsPtr, *sqlite3FilePtr, *sqlite3DataTablePtr, *sqlite3HashTablePtr)
+			if inputs.ProcessedInputDirectory == "" {
+				break
+			}
+			time.Sleep(time.Second)
+			if loops%60 == 0 {
+				lp(logh.Debug, "Waiting to process more input.")
+			}
+		}
 
 	} else {
 		parseFile(inputs, *dataFilePtr, *sqlite3FilePtr, *sqlite3DataTablePtr, *sqlite3HashTablePtr)
 	}
 
+	lp(logh.Info, "%s processing complete...", appName)
 	logh.ShutdownAll()
 }
 
-// parseFileEngine will use Go routines to start multiple instances of parseFile.
+// parseFileEngine will use Go routines to start multiple instances of parseFile and process all
+// files in the Inputs.DataDirectory
+// and process all files, forever.
 func parseFileEngine(inputs *parser.Inputs, fileList []fs.DirEntry, threads int,
 	sqlite3FilePath string, sqlite3DataTable string, sqlite3HashTable string) error {
 	tasks := make(chan string, threads)

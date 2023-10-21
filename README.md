@@ -36,6 +36,10 @@ Features:
 * Extraction - Supports "extraction". I.E. finding fields that match a regular expression, removing matches from input, and returning matches as an additional field. The main utility of extraction is when used with hashing to identify distinct row types. 
 * Hashing - After extracting values from field(s) (columns of data), hash the field(s) in order to allow pareto analysis. I.E. If the input has two rows with a given field containing `some critical event flag=1` and `some critical event flag=2`, you may really only want to know how many events occurred with `some critical event flag`. By extracting the `flag` value and hashing the result, those two fields are now the same and a pareto can be built on hashes. Keep a map[hash]field so you can decode the hashes back to something meaningful. Also note that several columns may be able to be combined into a single hash. This can greatly reduce storage costs by replacing many text fields, that are frequently repeated, with a single hash that is smaller in size.
 
+## Input
+Inputs are supplied both with command line parameters, and an Inputs file that provides the parsing details specific to a type of input file. For details on Inputs see [parser.go](./parser/parser.go)
+* A single input file can be processed by providing the `datafile` CLI parameter, which overrides Inputs.DataDirectory.
+* No `datafile` CLI parameter and presence of a Inputs.ProcessedInputDirectory means to watch the Inputs.DataDirectory and process all files, forever. (Inputs.ProcessedInputDirectory is a directory, that if present, indicates to move processed input files that directory.)  
 ## Output
 Parsed output is written to <USER_HOME>/tmp/go-parser/<DATA_FILE_NAME>.parsed.txt; hashes are written to <USER_HOME>/tmp/go-parser/<DATA_FILE_NAME>.hashes.txt. While the output files are being written the suffix is ".locked". When the files are fully processed the ".locked" suffix is removed and callers can use the output files.    
 
