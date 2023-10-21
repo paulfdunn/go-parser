@@ -11,13 +11,14 @@ import (
 	"bufio"
 	"flag"
 	"fmt"
+	"io"
 	"io/fs"
 	"os"
+	"os/exec"
 	"os/user"
 	"path/filepath"
 	"regexp"
 	"runtime/debug"
-	"sort"
 	"strings"
 	"sync"
 
@@ -44,10 +45,13 @@ var (
 	logFilePtr               *string
 	logLevel                 *int
 	parsedOutputDelimiterPtr *string
-	uniqueIdPtr              *string
-	uniqueIdRegexPtr         *string
+	sqlite3FilePtr           *string
+	sqlite3DataTablePtr      *string
+	sqlite3HashTablePtr      *string
 	stdoutPtr                *bool
 	threadsPtr               *int
+	uniqueIdPtr              *string
+	uniqueIdRegexPtr         *string
 
 	// dataDirectorySuffix is appended to the users home directory.
 	dataDirectorySuffix = filepath.Join(`tmp`, appName)
@@ -81,16 +85,18 @@ func main() {
 	}
 
 	dataFilePtr = flag.String("datafile", "", "Path to data file. Overrides input file DataDirectory.")
-	uniqueIdPtr = flag.String("uniqueid", "", "Unique ID that is output with each parsed row.")
-	uniqueIdRegexPtr = flag.String("uniqueidregex", "", "Regex that will be called on the input data to find a unique ID that "+
-		"is output with each parsed row. Overrides uniqueid parameter")
 	inputFilePtr = flag.String("inputfile", "", "Path to json file with inputs. See ./inputs/exampleInputs.json.")
 	logFilePtr = flag.String("logfile", "", "Name of log file in "+dataDirectory+"; blank to print logs to terminal.")
 	logLevel = flag.Int("loglevel", int(logh.Info), fmt.Sprintf("Logging level; default %d. Zero based index into: %v",
 		int(logh.Info), logh.DefaultLevels))
-	parsedOutputDelimiterPtr = flag.String("parseddelimiter", "|", "Delimiter used for parsed output.")
+	sqlite3FilePtr = flag.String("sqlite3file", "", "Fully qualified path to a sqlite3 database file that has tables already created. Output files will be imported into sqlite3 then deleted.")
+	sqlite3DataTablePtr = flag.String("sqlite3datatable", "data", "Used with sqlite3file to specify the table in which to import pased data; the table should already exist.")
+	sqlite3HashTablePtr = flag.String("sqlite3hashtable", "hash", "Used with sqlite3file to specify the table in which to import the hash table; the table should already exist.")
 	stdoutPtr = flag.Bool("stdout", true, "Output parsed data to STDOUT (in addition to file output)")
 	threadsPtr = flag.Int("threads", 6, "Threads to use when processing a directory")
+	uniqueIdPtr = flag.String("uniqueid", "", "Unique ID that is output with each parsed row.")
+	uniqueIdRegexPtr = flag.String("uniqueidregex", "", "Regex that will be called on the input data to find a unique ID that "+
+		"is output with each parsed row. Overrides uniqueid parameter")
 	flag.Usage = func() {
 		w := flag.CommandLine.Output()
 		fmt.Fprintf(w, "Usage of %s: note that parsed output will be written to %s, "+
@@ -131,17 +137,18 @@ func main() {
 			os.Exit(6)
 		}
 
-		parseFileEngine(inputs, files, *threadsPtr)
+		parseFileEngine(inputs, files, *threadsPtr, *sqlite3FilePtr, *sqlite3DataTablePtr, *sqlite3HashTablePtr)
 
 	} else {
-		parseFile(inputs, *dataFilePtr)
+		parseFile(inputs, *dataFilePtr, *sqlite3FilePtr, *sqlite3DataTablePtr, *sqlite3HashTablePtr)
 	}
 
 	logh.ShutdownAll()
 }
 
 // parseFileEngine will use Go routines to start multiple instances of parseFile.
-func parseFileEngine(inputs *parser.Inputs, fileList []fs.DirEntry, threads int) error {
+func parseFileEngine(inputs *parser.Inputs, fileList []fs.DirEntry, threads int,
+	sqlite3FilePath string, sqlite3DataTable string, sqlite3HashTable string) error {
 	tasks := make(chan string, threads)
 	// Make sure the error buffer cannot fill up and cause a deadlock.
 	// errorOut := make(chan error, threads)
@@ -152,7 +159,7 @@ func parseFileEngine(inputs *parser.Inputs, fileList []fs.DirEntry, threads int)
 		wg.Add(1)
 		go func() {
 			for file := range tasks {
-				parseFile(inputs, file)
+				parseFile(inputs, file, sqlite3FilePath, sqlite3DataTable, sqlite3HashTable)
 			}
 			wg.Done()
 		}()
@@ -190,7 +197,8 @@ func parseFileEngine(inputs *parser.Inputs, fileList []fs.DirEntry, threads int)
 // parseFile uses an input file from inputPath to process a data file from dataFilePath.
 // While the output files are being written the suffix is ".locked". When the files are fully
 // processed the ".locked" suffix is removed and callers can use the output files.
-func parseFile(inputs *parser.Inputs, dataFilePath string) {
+func parseFile(inputs *parser.Inputs, dataFilePath string, sqlite3FilePath string,
+	sqlite3DataTable string, sqlite3HashTable string) {
 
 	// Create the scanner and open the file.
 	scnr, err := parser.NewScanner(*inputs)
@@ -215,6 +223,15 @@ func parseFile(inputs *parser.Inputs, dataFilePath string) {
 	os.Rename(parsedOutputFilePath, parsedOutputFilePathUnlocked)
 	hashesOutputFilePathUnlocked := filepath.Join(dataDirectory, filepath.Base(dataFilePath)+hashesOutputFileSuffix)
 	os.Rename(hashesOutputFilePath, hashesOutputFilePathUnlocked)
+
+	if sqlite3FilePath != "" {
+		if scnr.HashingEnabled() && sqlite3HashTable != "" {
+			sqlite3Import(inputs.OutputDelimiter, sqlite3FilePath, hashesOutputFilePathUnlocked, sqlite3HashTable)
+			os.Remove(hashesOutputFilePathUnlocked)
+		}
+		sqlite3Import(inputs.OutputDelimiter, sqlite3FilePath, parsedOutputFilePathUnlocked, sqlite3DataTable)
+		os.Remove(parsedOutputFilePathUnlocked)
+	}
 }
 
 // processScanner takes a scanner, (optionally) finds the unique ID in the input to append to each row,
@@ -222,8 +239,6 @@ func parseFile(inputs *parser.Inputs, dataFilePath string) {
 // saved to the output, and  hashes saved to a seperate file.
 func processScanner(scnr *parser.Scanner, dataFilePath string,
 	parsedOutputFilePath string, hashesOutputFilePath string) {
-	hashMap := make(map[string]string)
-	hashCounts := make(map[string]int)
 
 	dataChan, errorChan := scnr.Read(100, 100)
 
@@ -237,21 +252,15 @@ func processScanner(scnr *parser.Scanner, dataFilePath string,
 	outputWriter := bufio.NewWriter(parsedOutputFile)
 	defer outputWriter.Flush()
 
-	hashing := false
-	if scnr.HashColumns != nil && len(scnr.HashColumns) > 0 {
-		hashing = true
-	}
-
 	var uniqueId string
 	var uniqueIdRegex *regexp.Regexp
 	unexpectedFieldCount := 0
-	sortedHashColumns := sort.IntSlice(scnr.HashColumns)
 	if *uniqueIdRegexPtr != "" {
 		uniqueIdRegex = regexp.MustCompile(*uniqueIdRegexPtr)
 	} else if *uniqueIdPtr != "" {
 		uniqueId = *uniqueIdPtr
 		lpf(logh.Info, "UniqueID from input: %s", uniqueId)
-		uniqueId += *parsedOutputDelimiterPtr
+		uniqueId += scnr.OutputDelimiter
 	}
 
 	if *stdoutPtr {
@@ -264,7 +273,7 @@ func processScanner(scnr *parser.Scanner, dataFilePath string,
 			if match != nil {
 				uniqueId = match[1]
 				lpf(logh.Info, "UniqueID found via regex: %s", uniqueId)
-				uniqueId += *parsedOutputDelimiterPtr
+				uniqueId += scnr.OutputDelimiter
 			}
 		}
 
@@ -277,22 +286,22 @@ func processScanner(scnr *parser.Scanner, dataFilePath string,
 		splits, err := scnr.Split(row)
 		if err != nil {
 			unexpectedFieldCount++
-			lpf(logh.Error, "%+v, splits:%s", err, strings.Join(splits, *parsedOutputDelimiterPtr))
+			lpf(logh.Error, "%+v, splits:%s", err, strings.Join(splits, scnr.OutputDelimiter))
 		}
 		extracts, errors := scnr.Extract(splits)
 		for _, errs := range errors {
 			lpf(logh.Warning, "%+v", errs)
 		}
 
-		if hashing {
-			sehc := splitsExcludeHashColumns(sortedHashColumns, splits, hashCounts, hashMap)
-			out := uniqueId + strings.Join(sehc, *parsedOutputDelimiterPtr) + "|EXTRACTS|" + strings.Join(extracts, *parsedOutputDelimiterPtr)
+		if scnr.HashingEnabled() {
+			sehc := scnr.SplitsExcludeHashColumns(splits)
+			out := uniqueId + strings.Join(sehc, scnr.OutputDelimiter) + "|EXTRACTS|" + strings.Join(extracts, scnr.OutputDelimiter)
 			outputWriter.WriteString(out + "\n")
 			if *stdoutPtr {
 				fmt.Println(out)
 			}
 		} else {
-			out := uniqueId + strings.Join(splits, *parsedOutputDelimiterPtr) + "|EXTRACTS|" + strings.Join(extracts, *parsedOutputDelimiterPtr)
+			out := uniqueId + strings.Join(splits, scnr.OutputDelimiter) + "|EXTRACTS|" + strings.Join(extracts, scnr.OutputDelimiter)
 			outputWriter.WriteString(out + "\n")
 			if *stdoutPtr {
 				fmt.Println(out)
@@ -309,8 +318,8 @@ func processScanner(scnr *parser.Scanner, dataFilePath string,
 		fmt.Println("---------------- PARSED OUTPUT END   ----------------")
 	}
 
-	if hashing {
-		saveHashes(hashCounts, hashMap, hashesOutputFilePath, dataFilePath)
+	if scnr.HashingEnabled() {
+		saveHashes(scnr.HashCounts, scnr.HashMap, hashesOutputFilePath, dataFilePath)
 	}
 }
 
@@ -338,44 +347,29 @@ func saveHashes(hashCounts map[string]int, hashMap map[string]string, hashesOutp
 	}
 }
 
-// splitsExcludeHashColumns creates a version of splits that doesn't included the hash columns.
-// It also calculates the hash of splits and adds the hash to hashMap and hashCount
-func splitsExcludeHashColumns(sortedHashColumns []int, splits []string,
-	hashCounts map[string]int, hashMap map[string]string) []string {
-	// Create the hash
-	hashSplits := make([]string, 0, len(sortedHashColumns))
-	for _, v := range sortedHashColumns {
-		hashSplits = append(hashSplits, splits[v])
+// sqlite3Import is used to import the delimited output files into a sqlite3 database.
+// Sqlite3 will create the file if it does not exist. It is not great, as that means the user
+// didn't create the table either. In which case, sqlite3 does the best it can and imports.
+func sqlite3Import(outputDelimiter, sqlite3FilePath, outputFilePath, sqlite3Table string) {
+	// if _, err := os.Stat(sqlite3FilePath); err == nil {
+	args := []string{"-separator", outputDelimiter, sqlite3FilePath}
+	sqc := fmt.Sprintf(".import %s %s", outputFilePath, sqlite3Table)
+	cmd := exec.Command("sqlite3", args...)
+	stdin, err := cmd.StdinPipe()
+	if err != nil {
+		lpf(logh.Error, "StdinPipe: %+v", err)
 	}
-	hashString := strings.Join(hashSplits, *parsedOutputDelimiterPtr)
-	hash := "0x" + parser.Hash(hashString)
-	hashMap[hash] = hashString
-	hashCounts[hash] += 1
-
-	// Create a version of splits that doesn't included the hash columns.
-	// The idea is to substitute multiple columns with the hash.
-	// Make a copy of sortedHashColumns that is used to create a list of splits
-	// that don't include hash columns.
-	shc := make([]int, len(sortedHashColumns))
-	copy(shc, sortedHashColumns)
-	splitsExcludeHashColumns := make([]string, 0, len(splits)-len(sortedHashColumns)+1)
-	hashInserted := false
-	for i := range splits {
-		if len(shc) > 0 {
-			// Check each index in splits. If the index is in the slice of (sorted) hashed
-			// columns, don't include the split in the return data.
-			// The hash is inserted at the first hashed (dropped) column.
-			if i == shc[0] {
-				if !hashInserted {
-					hashInserted = true
-					splitsExcludeHashColumns = append(splitsExcludeHashColumns, hash)
-				}
-				shc = shc[1:]
-				continue
-			}
-		}
-		splitsExcludeHashColumns = append(splitsExcludeHashColumns, splits[i])
+	_, err = io.WriteString(stdin, sqc)
+	if err != nil {
+		lpf(logh.Error, "WriteString: %+v", err)
 	}
-
-	return splitsExcludeHashColumns
+	stdin.Close()
+	stdoutStderr, err := cmd.CombinedOutput()
+	if err != nil {
+		lpf(logh.Error, "calling sqlite3: %+v, args: %+v", err, args)
+	}
+	lpf(logh.Debug, "stdoutStderr: \n%s", stdoutStderr)
+	// } else {
+	// 	lpf(logh.Error, "accessing sqlite3File path: %+v", err)
+	// }
 }

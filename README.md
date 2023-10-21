@@ -1,6 +1,34 @@
 # go-parser
 Go-parser was written to support parsing of log files that were written for human consumption and are generally difficult to parse.
 
+```
+pauldunn@PAULs-14-MBP go-parser % go build  
+pauldunn@PAULs-14-MBP go-parser % ./go-parser -help
+Usage of ./go-parser: note that parsed output will be written to /Users/pauldunn/tmp/go-parser, using the data file name with '.parsed.txt' appended as a file suffix 
+  -datafile string
+    	Path to data file. Overrides input file DataDirectory.
+  -inputfile string
+    	Path to json file with inputs. See ./inputs/exampleInputs.json.
+  -logfile string
+    	Name of log file in /Users/pauldunn/tmp/go-parser; blank to print logs to terminal.
+  -loglevel int
+    	Logging level; default 1. Zero based index into: [debug info warning audit error] (default 1)
+  -sqlite3datatable string
+    	Used with sqlite3file to specify the table in which to import pased data; the table should already exist. (default "data")
+  -sqlite3file string
+    	Fully qualified path to a sqlite3 database file that has tables already created. Output files will be imported into sqlite3 then deleted.
+  -sqlite3hashtable string
+    	Used with sqlite3file to specify the table in which to import the hash table; the table should already exist. (default "hash")
+  -stdout
+    	Output parsed data to STDOUT (in addition to file output) (default true)
+  -threads int
+    	Threads to use when processing a directory (default 6)
+  -uniqueid string
+    	Unique ID that is output with each parsed row.
+  -uniqueidregex string
+    	Regex that will be called on the input data to find a unique ID that is output with each parsed row. Overrides uniqueid parameter
+```  
+
 Features:
 * Reading data - Supports reading from a file or directly from an from an io.Reader. Data and errors are returned via channels, allowing multi-threading. Data is returned via a channel, making iterating easy.
 * Replacement - Supports direct replacement using regular expressions. This feature can be used to replace string lacking delimiters with strings that have delimiters, or for any other replacement purposes.

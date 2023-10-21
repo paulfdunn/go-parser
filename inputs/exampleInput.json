@@ -1,6 +1,6 @@
 {
     "DataDirectory": "./parser/test",
-    "Delimiter": "\\s\\s",
+    "InputDelimiter": "\\s\\s",
     "Extracts": [
         {
             "_comment": "capture string that starts with alpha or number, and contains alpha, number, [_.-:], that has leading space delimited",
@@ -40,6 +40,7 @@
     ],
     "ExpectedFieldCount": 8,
     "NegativeFilter": "",
+    "OutputDelimiter": "|",
     "PositiveFilter": "(\\d{4}-\\d{2}-\\d{2}[ -]\\d{2}:\\d{2}:\\d{2}\\.\\d{2}\\s+[a-zA-Z]{2,5})",
     "Replacements": [
         {

@@ -18,6 +18,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"sort"
+	"strings"
 )
 
 // Extract objects determine how extractions (Scanner.Extract) occur.
@@ -37,15 +38,16 @@ type Extract struct {
 // Inputs to parser. This object is just used for unmarshalling inputs from a file.
 // The values are then stored with the scanner.
 type Inputs struct {
-	DataDirectory      string
-	Delimiter          string
-	ExpectedFieldCount int
-	Extracts           []*Extract
-	HashColumns        []int
-	NegativeFilter     string
-	PositiveFilter     string
-	ProcessedDirectory string
-	Replacements       []*Replacement
+	DataDirectory           string
+	ExpectedFieldCount      int
+	Extracts                []*Extract
+	HashColumns             []int
+	InputDelimiter          string
+	NegativeFilter          string
+	OutputDelimiter         string
+	PositiveFilter          string
+	ProcessedInputDirectory string
+	Replacements            []*Replacement
 }
 
 // Replacement objects determine how replacements (Scanner.Replacement) occur.
@@ -59,32 +61,36 @@ type Replacement struct {
 
 // Scanner is the main object of this package.
 // dataDirectory - Directory with input files.
-// delimiter - Regexp used by Split to split rows of data.
 // expectedFieldCount - Expected number of fields after calling Split.
 // extract - Extract objects; used for extracting values from rows into their own fields.
 // hashColumns - Column indeces of Split data used to create the hash.
+// inputDelimiter - Regexp used by Split to split rows of data.
 // negativeFilter - Regex used for negative filtering. Rows matching this value are excluded.
+// outDelimiter - String used to delimit parsed output data.
 // positiveFilter - Regex used for positive filtering. Rows must match to be included.
-// processedDirectory - When Read completes, move the file to this directory; empty string means the file is left in place.
+// processedInputDirectory - When Read completes, move the file to this directory; empty string means the file is left in place.
 // replace - Replacement values used for performing regex replacements on input data.
 type Scanner struct {
-	HashColumns []int
+	HashColumns     []int
+	HashCounts      map[string]int
+	HashMap         map[string]string
+	OutputDelimiter string
 
-	dataChan           chan string
-	dataDirectory      string
-	delimiter          *regexp.Regexp
-	errorChan          chan error
-	expectedFieldCount int
-	extract            []*Extract
-	file               *os.File
-	negativeFilter     *regexp.Regexp
-	positiveFilter     *regexp.Regexp
-	processedDirectory string
-	replace            []*Replacement
-	scanner            *bufio.Scanner
+	dataChan                chan string
+	dataDirectory           string
+	errorChan               chan error
+	expectedFieldCount      int
+	extract                 []*Extract
+	file                    *os.File
+	inputDelimiter          *regexp.Regexp
+	negativeFilter          *regexp.Regexp
+	positiveFilter          *regexp.Regexp
+	processedInputDirectory string
+	replace                 []*Replacement
+	scanner                 *bufio.Scanner
 }
 
-// Extract takes an input row slice (call Split to split a row on scnr.delimiter)
+// Extract takes an input row slice (call Split to split a row on scnr.inputDelimiter)
 // and applies the scnr.extract values to extract values from a column.
 func (scnr *Scanner) Extract(row []string) ([]string, []error) {
 	var extracts []string
@@ -123,6 +129,14 @@ func (scnr *Scanner) Filter(row string) bool {
 		return true
 	}
 	if scnr.positiveFilter != nil && !scnr.positiveFilter.MatchString(row) {
+		return true
+	}
+	return false
+}
+
+// HashingEnabled is true when the inputs are specifying that hashing is to be performed; false otherwise.
+func (scnr *Scanner) HashingEnabled() bool {
+	if scnr.HashColumns != nil && len(scnr.HashColumns) > 0 {
 		return true
 	}
 	return false
@@ -170,8 +184,8 @@ func (scnr *Scanner) Read(databuffer int, errorBuffer int) (<-chan string, <-cha
 		processedFileName := scnr.file.Name()
 		scnr.Shutdown()
 
-		if scnr.processedDirectory != "" {
-			err := os.Rename(processedFileName, filepath.Join(scnr.processedDirectory, filepath.Base(processedFileName)))
+		if scnr.processedInputDirectory != "" {
+			err := os.Rename(processedFileName, filepath.Join(scnr.processedInputDirectory, filepath.Base(processedFileName)))
 			if err != nil {
 				scnr.errorChan <- err
 			}
@@ -197,15 +211,57 @@ func (scnr *Scanner) Shutdown() {
 	}
 }
 
-// Split uses the scnr.delimiter to split the input data row. An error is returned if the
+// Split uses the scnr.inputDelimiter to split the input data row. An error is returned if the
 // resulting number of splits is not equal to Inputs.ExpectedFieldCount. But the data is
 // returned and callers can choose to ignore the error if that is appropriate.
 func (scnr *Scanner) Split(row string) ([]string, error) {
-	splt := scnr.delimiter.Split(row, -1)
+	splt := scnr.inputDelimiter.Split(row, -1)
 	if len(splt) != scnr.expectedFieldCount {
 		return splt, fmt.Errorf("Split expectedFieldCount: %d, actual: %d", scnr.expectedFieldCount, len(splt))
 	}
 	return splt, nil
+}
+
+// SplitsExcludeHashColumns creates a version of Split data that doesn't included the hash columns.
+// It also calculates the hash of splits and adds the hash to hashMap and hashCount
+func (scnr *Scanner) SplitsExcludeHashColumns(splits []string) []string {
+	// Create the hash
+	sortedHashColumns := sort.IntSlice(scnr.HashColumns)
+	hashSplits := make([]string, 0, len(sortedHashColumns))
+	for _, v := range sortedHashColumns {
+		hashSplits = append(hashSplits, splits[v])
+	}
+	hashString := strings.Join(hashSplits, scnr.OutputDelimiter)
+	hash := "0x" + Hash(hashString)
+	scnr.HashMap[hash] = hashString
+	scnr.HashCounts[hash] += 1
+
+	// Create a version of splits that doesn't included the hash columns.
+	// The idea is to substitute multiple columns with the hash.
+	// Make a copy of sortedHashColumns that is used to create a list of splits
+	// that don't include hash columns.
+	shc := make([]int, len(sortedHashColumns))
+	copy(shc, sortedHashColumns)
+	splitsExcludeHashColumns := make([]string, 0, len(splits)-len(sortedHashColumns)+1)
+	hashInserted := false
+	for i := range splits {
+		if len(shc) > 0 {
+			// Check each index in splits. If the index is in the slice of (sorted) hashed
+			// columns, don't include the split in the return data.
+			// The hash is inserted at the first hashed (dropped) column.
+			if i == shc[0] {
+				if !hashInserted {
+					hashInserted = true
+					splitsExcludeHashColumns = append(splitsExcludeHashColumns, hash)
+				}
+				shc = shc[1:]
+				continue
+			}
+		}
+		splitsExcludeHashColumns = append(splitsExcludeHashColumns, splits[i])
+	}
+
+	return splitsExcludeHashColumns
 }
 
 // Hash returns the hex string of the MD5 hash of the input. Call this on fields where
@@ -237,14 +293,20 @@ func NewInputs(filePath string) (*Inputs, error) {
 // NewScanner is a constuctor for Scanners. See the Scanner definition for
 // a description of inputs.
 func NewScanner(inputs Inputs) (*Scanner, error) {
-	rgx, err := regexp.Compile(inputs.Delimiter)
+	hashMap := make(map[string]string)
+	hashCounts := make(map[string]int)
+
+	rgx, err := regexp.Compile(inputs.InputDelimiter)
 	if err != nil {
 		return nil, err
 	}
 	scnr := &Scanner{
 		HashColumns:        inputs.HashColumns,
+		HashCounts:         hashCounts,
+		HashMap:            hashMap,
+		OutputDelimiter:    inputs.OutputDelimiter,
 		dataDirectory:      inputs.DataDirectory,
-		delimiter:          rgx,
+		inputDelimiter:     rgx,
 		expectedFieldCount: inputs.ExpectedFieldCount,
 	}
 
@@ -277,10 +339,10 @@ func NewScanner(inputs Inputs) (*Scanner, error) {
 		scnr.extract[index].regex = rgx
 	}
 
-	if _, err := os.Stat(inputs.ProcessedDirectory); inputs.ProcessedDirectory != "" && os.IsNotExist(err) {
-		return nil, fmt.Errorf("processedDirectory does not exist, error: %+v", err)
+	if _, err := os.Stat(inputs.ProcessedInputDirectory); inputs.ProcessedInputDirectory != "" && os.IsNotExist(err) {
+		return nil, fmt.Errorf("processedInputDirectory does not exist, error: %+v", err)
 	}
-	scnr.processedDirectory = inputs.ProcessedDirectory
+	scnr.processedInputDirectory = inputs.ProcessedInputDirectory
 
 	return scnr, nil
 }
