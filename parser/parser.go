@@ -90,6 +90,15 @@ type Scanner struct {
 	scanner                 *bufio.Scanner
 }
 
+// The hash can be output in a pure string format (I.E. "0xdeadbeef") or a format compatible
+// for importing into Sqlite3 as a Blob (I.E. x'deadbeef').
+type HashFormat int
+
+const (
+	HASH_FORMAT_STRING HashFormat = iota
+	HASH_FORMAT_SQLITE3
+)
+
 // Extract takes an input row slice (call Split to split a row on scnr.inputDelimiter)
 // and applies the scnr.extract values to extract values from a column.
 func (scnr *Scanner) Extract(row []string) ([]string, []error) {
@@ -224,7 +233,7 @@ func (scnr *Scanner) Split(row string) ([]string, error) {
 
 // SplitsExcludeHashColumns creates a version of Split data that doesn't included the hash columns.
 // It also calculates the hash of splits and adds the hash to hashMap and hashCount
-func (scnr *Scanner) SplitsExcludeHashColumns(splits []string) []string {
+func (scnr *Scanner) SplitsExcludeHashColumns(splits []string, hashFormat HashFormat) ([]string, error) {
 	// Create the hash
 	sortedHashColumns := sort.IntSlice(scnr.HashColumns)
 	hashSplits := make([]string, 0, len(sortedHashColumns))
@@ -232,7 +241,10 @@ func (scnr *Scanner) SplitsExcludeHashColumns(splits []string) []string {
 		hashSplits = append(hashSplits, splits[v])
 	}
 	hashString := strings.Join(hashSplits, scnr.OutputDelimiter)
-	hash := "0x" + Hash(hashString)
+	hash, err := Hash(hashString, hashFormat)
+	if err != nil {
+		return nil, err
+	}
 	scnr.HashMap[hash] = hashString
 	scnr.HashCounts[hash] += 1
 
@@ -261,7 +273,7 @@ func (scnr *Scanner) SplitsExcludeHashColumns(splits []string) []string {
 		splitsExcludeHashColumns = append(splitsExcludeHashColumns, splits[i])
 	}
 
-	return splitsExcludeHashColumns
+	return splitsExcludeHashColumns, nil
 }
 
 // Hash returns the hex string of the MD5 hash of the input. Call this on fields where
@@ -269,10 +281,22 @@ func (scnr *Scanner) SplitsExcludeHashColumns(splits []string) []string {
 // This can also be used to reduce storage space when storing in a database by replacing
 // multiple fields with a single hash, and keeping a separate table mapping hashes to
 // original field values.
-func Hash(input string) string {
+// Sqlite3 will import a hex value in the format x'deadbeef' as a blob, which will consume
+// half the space of the string equivalent.
+func Hash(input string, format HashFormat) (string, error) {
 	h := md5.New()
-	io.WriteString(h, input)
-	return fmt.Sprintf("%x", h.Sum(nil))
+	var out string
+	_, err := io.WriteString(h, input)
+	if err != nil {
+		return "", err
+	}
+	switch format {
+	case HASH_FORMAT_STRING:
+		out = fmt.Sprintf("0x%x", h.Sum(nil))
+	case HASH_FORMAT_SQLITE3:
+		out = fmt.Sprintf("x'%x'", h.Sum(nil))
+	}
+	return out, err
 }
 
 // NewInputs unmarshalls a JSON file into a new Inputs object.

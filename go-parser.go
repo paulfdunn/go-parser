@@ -41,18 +41,17 @@ var (
 	lpf func(logh.LoghLevel, string, ...any)
 
 	// CLI flags
-	dataFilePtr              *string
-	inputFilePtr             *string
-	logFilePtr               *string
-	logLevel                 *int
-	parsedOutputDelimiterPtr *string
-	sqlite3FilePtr           *string
-	sqlite3DataTablePtr      *string
-	sqlite3HashTablePtr      *string
-	stdoutPtr                *bool
-	threadsPtr               *int
-	uniqueIdPtr              *string
-	uniqueIdRegexPtr         *string
+	dataFilePtr         *string
+	inputFilePtr        *string
+	logFilePtr          *string
+	logLevel            *int
+	sqlite3FilePtr      *string
+	sqlite3DataTablePtr *string
+	sqlite3HashTablePtr *string
+	stdoutPtr           *bool
+	threadsPtr          *int
+	uniqueIdPtr         *string
+	uniqueIdRegexPtr    *string
 
 	// dataDirectorySuffix is appended to the users home directory.
 	dataDirectorySuffix = filepath.Join(`tmp`, appName)
@@ -61,7 +60,7 @@ var (
 
 func crashDetect() {
 	if err := recover(); err != nil {
-		errOut := fmt.Sprintf("panic: %+v\n%+v", err, string(debug.Stack()))
+		errOut := fmt.Sprintf("panic: %+v\n%s", err, string(debug.Stack()))
 		fmt.Println(errOut)
 		logh.Map[appName].Println(logh.Error, errOut)
 		errShutdown := logh.ShutdownAll()
@@ -76,13 +75,13 @@ func main() {
 
 	usr, err := user.Current()
 	if err != nil {
-		fmt.Printf("Error getting user.Currrent: %+v", err)
+		fmt.Printf("Error getting user.Currrent: %s", err)
 	}
 
 	dataDirectory = filepath.Join(usr.HomeDir, dataDirectorySuffix)
 	err = os.MkdirAll(dataDirectory, 0777)
 	if err != nil {
-		fmt.Printf("Error creating data directory: : %+v", err)
+		fmt.Printf("Error creating data directory: : %s", err)
 	}
 
 	dataFilePtr = flag.String("datafile", "", "Path to data file. Overrides input file DataDirectory.")
@@ -129,13 +128,13 @@ func main() {
 	// The `datafile` CLI parameter overrides the Inputs.DataDirectory.
 	if *dataFilePtr == "" && inputs.DataDirectory != "" {
 		if _, err := os.Stat(inputs.DataDirectory); os.IsNotExist(err) {
-			lpf(logh.Error, "inputs.DataDirectory does not exist: %+v", err)
+			lpf(logh.Error, "inputs.DataDirectory does not exist: %s", err)
 			os.Exit(5)
 		}
 
 		files, err := os.ReadDir(inputs.DataDirectory)
 		if err != nil {
-			lpf(logh.Error, "ReadDir error: %+v", err)
+			lpf(logh.Error, "ReadDir error: %s", err)
 			os.Exit(6)
 		}
 
@@ -162,8 +161,7 @@ func main() {
 }
 
 // parseFileEngine will use Go routines to start multiple instances of parseFile and process all
-// files in the Inputs.DataDirectory
-// and process all files, forever.
+// files in the Inputs.DataDirectory.
 func parseFileEngine(inputs *parser.Inputs, fileList []fs.DirEntry, threads int,
 	sqlite3FilePath string, sqlite3DataTable string, sqlite3HashTable string) error {
 	tasks := make(chan string, threads)
@@ -220,19 +218,24 @@ func parseFile(inputs *parser.Inputs, dataFilePath string, sqlite3FilePath strin
 	// Create the scanner and open the file.
 	scnr, err := parser.NewScanner(*inputs)
 	if err != nil {
-		lpf(logh.Error, "calling NewScanner: %+v", err)
+		lpf(logh.Error, "calling NewScanner: %s", err)
 		os.Exit(9)
 	}
 	err = scnr.OpenFileScanner(dataFilePath)
 	if err != nil {
-		lpf(logh.Error, "calling OpenScanner: %+v", err)
+		lpf(logh.Error, "calling OpenScanner: %s", err)
 		os.Exit(13)
+	}
+
+	hashFormat := parser.HASH_FORMAT_STRING
+	if sqlite3FilePath != "" {
+		hashFormat = parser.HASH_FORMAT_SQLITE3
 	}
 
 	// Process all data.
 	parsedOutputFilePath := filepath.Join(dataDirectory, filepath.Base(dataFilePath)+parsedOutputFileSuffix+lockedFileSuffix)
 	hashesOutputFilePath := filepath.Join(dataDirectory, filepath.Base(dataFilePath)+hashesOutputFileSuffix+lockedFileSuffix)
-	processScanner(scnr, dataFilePath, parsedOutputFilePath, hashesOutputFilePath)
+	processScanner(scnr, dataFilePath, parsedOutputFilePath, hashesOutputFilePath, hashFormat)
 	scnr.Shutdown()
 
 	// Rename the output files, removing the lockedFileSuffix
@@ -255,14 +258,14 @@ func parseFile(inputs *parser.Inputs, dataFilePath string, sqlite3FilePath strin
 // then replaces, spits, extracts, and hashes all data from the scanner. The parsed data is
 // saved to the output, and  hashes saved to a seperate file.
 func processScanner(scnr *parser.Scanner, dataFilePath string,
-	parsedOutputFilePath string, hashesOutputFilePath string) {
+	parsedOutputFilePath string, hashesOutputFilePath string, hashFormat parser.HashFormat) {
 
 	dataChan, errorChan := scnr.Read(100, 100)
 
 	parsedOutputFile, err := os.Create(parsedOutputFilePath)
 	lpf(logh.Info, "parsed output file: %s", parsedOutputFilePath)
 	if err != nil {
-		lpf(logh.Error, "calling os.Create: %+v", err)
+		lpf(logh.Error, "calling os.Create: %s", err)
 		os.Exit(17)
 	}
 	defer parsedOutputFile.Close()
@@ -306,12 +309,15 @@ func processScanner(scnr *parser.Scanner, dataFilePath string,
 			lpf(logh.Error, "%+v, splits:%s", err, strings.Join(splits, scnr.OutputDelimiter))
 		}
 		extracts, errors := scnr.Extract(splits)
-		for _, errs := range errors {
-			lpf(logh.Warning, "%+v", errs)
+		for _, err := range errors {
+			lpf(logh.Warning, "%s", err)
 		}
 
 		if scnr.HashingEnabled() {
-			sehc := scnr.SplitsExcludeHashColumns(splits)
+			sehc, err := scnr.SplitsExcludeHashColumns(splits, hashFormat)
+			if err != nil {
+				lpf(logh.Error, "calling SplitsExcludeHashColumns: %s", err)
+			}
 			out := uniqueId + strings.Join(sehc, scnr.OutputDelimiter) + "|EXTRACTS|" + strings.Join(extracts, scnr.OutputDelimiter)
 			outputWriter.WriteString(out + "\n")
 			if *stdoutPtr {
@@ -374,19 +380,19 @@ func sqlite3Import(outputDelimiter, sqlite3FilePath, outputFilePath, sqlite3Tabl
 	cmd := exec.Command("sqlite3", args...)
 	stdin, err := cmd.StdinPipe()
 	if err != nil {
-		lpf(logh.Error, "StdinPipe: %+v", err)
+		lpf(logh.Error, "StdinPipe: %s", err)
 	}
 	_, err = io.WriteString(stdin, sqc)
 	if err != nil {
-		lpf(logh.Error, "WriteString: %+v", err)
+		lpf(logh.Error, "WriteString: %s", err)
 	}
 	stdin.Close()
 	stdoutStderr, err := cmd.CombinedOutput()
 	if err != nil {
-		lpf(logh.Error, "calling sqlite3: %+v, args: %+v", err, args)
+		lpf(logh.Error, "calling sqlite3: %+v, args: %s", err, args)
 	}
 	lpf(logh.Debug, "stdoutStderr: \n%s", stdoutStderr)
 	// } else {
-	// 	lpf(logh.Error, "accessing sqlite3File path: %+v", err)
+	// 	lpf(logh.Error, "accessing sqlite3File path: %s", err)
 	// }
 }
