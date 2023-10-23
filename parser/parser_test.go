@@ -212,6 +212,7 @@ func ExampleScanner_Filter_positive() {
 // include a delimiter with text that does have a delimiter. The delimiter in this example is two or more
 // spaces. More than 2 consecutive spaces are also replaced with 2 spaces to enable splitting on a
 // consistent delimiter.
+// This also shows how to replace a datetime string with Unix epoch.
 func ExampleScanner_Replace() {
 	delimiter := `\s\s`
 	delimiterString := "  "
@@ -222,6 +223,7 @@ func ExampleScanner_Replace() {
 	rplc := []*Replacement{
 		{RegexString: "(class poor delimiting)", Replacement: delimiterString + "${1}" + delimiterString},
 		{RegexString: `\s\s+`, Replacement: delimiterString},
+		{RegexString: DATE_TIME_REGEX},
 	}
 	defaultInputs, _ := NewInputs("./test/testInputs.json")
 	defaultInputs.InputDelimiter = delimiter
@@ -247,10 +249,10 @@ func ExampleScanner_Replace() {
 	// Output:
 	//
 	// Input data:
-	// 2023-10-07 12:00:00.00 MDT  0         000 class poor delimiting debug embedded values            sw_a          Message with embedded hex flag=0x01 and integer flag = 003
+	// 2023-10-07 12:00:00.01 MDT  0         000 class poor delimiting debug embedded values            sw_a          Message with embedded hex flag=0x01 and integer flag = 003
 	//
 	// Replaced data:
-	// 2023-10-07 12:00:00.00 MDT  0  000  class poor delimiting  debug embedded values  sw_a  Message with embedded hex flag=0x01 and integer flag = 003
+	// 1696680000000000.01 MDT  0  000  class poor delimiting  debug embedded values  sw_a  Message with embedded hex flag=0x01 and integer flag = 003
 }
 
 // ExampleScanner_Split shows how to use the Split function. In this case the data is then

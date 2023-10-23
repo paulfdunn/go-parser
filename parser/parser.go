@@ -19,6 +19,7 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+	"time"
 )
 
 // Extract objects determine how extractions (Scanner.Extract) occur.
@@ -97,6 +98,12 @@ type HashFormat int
 const (
 	HASH_FORMAT_STRING HashFormat = iota
 	HASH_FORMAT_SQLITE3
+)
+
+const (
+	// Replacement regex that match this string will be replaced with unixmicro values to save
+	// storage space.
+	DATE_TIME_REGEX = "(\\d{4}-\\d{2}-\\d{2}[ -]\\d{2}:\\d{2}:\\d{2})"
 )
 
 // Extract takes an input row slice (call Split to split a row on scnr.inputDelimiter)
@@ -204,10 +211,15 @@ func (scnr *Scanner) Read(databuffer int, errorBuffer int) (<-chan string, <-cha
 	return scnr.dataChan, scnr.errorChan
 }
 
-// Replace applies the scnr.replace values to the supplied input row of data.
+// Replace applies the scnr.replace values to the supplied input row of data. The special case where
+// RegexString == DATE_TIME_REGEX uses a function to replace a date time string with Unix epoch.
 func (scnr *Scanner) Replace(row string) string {
 	for _, rplc := range scnr.replace {
-		row = rplc.regex.ReplaceAllString(row, rplc.Replacement)
+		if rplc.RegexString == DATE_TIME_REGEX {
+			row = string(rplc.regex.ReplaceAllFunc([]byte(row), dateTimeToUnixEpoch))
+		} else {
+			row = rplc.regex.ReplaceAllString(row, rplc.Replacement)
+		}
 	}
 	return row
 }
@@ -386,6 +398,13 @@ func SortedHashMapCounts(inputMap map[string]int) []string {
 	return hashes
 }
 
+// dateTimeToUnixEpoch is used to convert strings that match DATE_TIME_REGEX into Unix epoch
+func dateTimeToUnixEpoch(input []byte) []byte {
+	t, _ := time.Parse(time.DateTime, string(input))
+	return []byte(fmt.Sprint(t.UnixMicro()))
+}
+
+// setFilter is a convenience function to set the Scanner filters from inputs.
 func (scnr *Scanner) setFilter(positive bool, regex string) error {
 	if regex == "" {
 		return nil

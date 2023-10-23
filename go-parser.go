@@ -156,7 +156,7 @@ func main() {
 		parseFile(inputs, *dataFilePtr, *sqlite3FilePtr, *sqlite3DataTablePtr, *sqlite3HashTablePtr)
 	}
 
-	lp(logh.Info, "%s processing complete...", appName)
+	lpf(logh.Info, "%s processing complete...", appName)
 	logh.ShutdownAll()
 }
 
