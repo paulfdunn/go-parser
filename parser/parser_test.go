@@ -398,6 +398,7 @@ func ExampleScanner_Extract_andHash() {
 		},
 	}
 	defaultInputs, _ := NewInputs("./test/testInputs.json")
+	defaultInputs.NegativeFilter = `serial number`
 	defaultInputs.InputDelimiter = delimiter
 	defaultInputs.Replacements = []*Replacement{{RegexString: `\s\s+`, Replacement: delimiterString}}
 	defaultInputs.Extracts = extracts
@@ -411,6 +412,9 @@ func ExampleScanner_Extract_andHash() {
 	sql := []string{}
 	sqlShort := []string{}
 	for row := range dataChan {
+		if scnr.Filter(row) {
+			continue
+		}
 		splits, _ := scnr.Split(row)
 		fullData = append(fullData, strings.Join(splits, "|"))
 		extracts, _ := scnr.Extract(splits)

@@ -316,7 +316,6 @@ func processScanner(scnr *parser.Scanner, flags flags, parsedOutputFilePath stri
 			if match != nil {
 				flags.uniqueId = match[1]
 				lpf(logh.Info, "UniqueID found via regex: %s", flags.uniqueId)
-				flags.uniqueId += scnr.OutputDelimiter
 			}
 		}
 
@@ -344,9 +343,12 @@ func processScanner(scnr *parser.Scanner, flags flags, parsedOutputFilePath stri
 			var out string
 
 			if flags.sqlColumns > 0 {
-				out = flags.uniqueId + scnr.SplitsToSql(flags.sqlColumns, flags.sqlDataTable, sehc, extracts)
+				if flags.uniqueId != "" {
+					sehc = append([]string{flags.uniqueId}, sehc...)
+				}
+				out = scnr.SplitsToSql(flags.sqlColumns, flags.sqlDataTable, sehc, extracts)
 			} else {
-				out = flags.uniqueId + strings.Join(sehc, scnr.OutputDelimiter) + "|EXTRACTS|" + strings.Join(extracts, scnr.OutputDelimiter)
+				out = flags.uniqueId + scnr.OutputDelimiter + strings.Join(sehc, scnr.OutputDelimiter) + "|EXTRACTS|" + strings.Join(extracts, scnr.OutputDelimiter)
 			}
 			outputWriter.WriteString(out + "\n")
 			if flags.stdout {
@@ -355,9 +357,12 @@ func processScanner(scnr *parser.Scanner, flags flags, parsedOutputFilePath stri
 		} else {
 			var out string
 			if flags.sqlColumns > 0 {
-				out = flags.uniqueId + scnr.SplitsToSql(flags.sqlColumns, flags.sqlDataTable, splits, extracts)
+				if flags.uniqueId != "" {
+					splits = append([]string{flags.uniqueId}, splits...)
+				}
+				out = scnr.SplitsToSql(flags.sqlColumns, flags.sqlDataTable, splits, extracts)
 			} else {
-				out = flags.uniqueId + strings.Join(splits, scnr.OutputDelimiter) + "|EXTRACTS|" + strings.Join(extracts, scnr.OutputDelimiter)
+				out = flags.uniqueId + scnr.OutputDelimiter + strings.Join(splits, scnr.OutputDelimiter) + "|EXTRACTS|" + strings.Join(extracts, scnr.OutputDelimiter)
 			}
 			outputWriter.WriteString(out + "\n")
 			if flags.stdout {

@@ -54,5 +54,5 @@
             "Replacement": "  "
         }
     ],
-    "SqlQuoteColumns":[0]
+    "SqlQuoteColumns":[0,1]
 }

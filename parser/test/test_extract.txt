@@ -1,3 +1,4 @@
+serial number:SOME_SERIAL
 2023-10-07 12:00:00.00 MDT  0         0         notification  debug          multi word type     sw_a          Unit 12.Ab.34 message (789)
 2023-10-07 12:00:00.01 MDT  1         001       notification  info           SingleWordType      sw_b          Info SW version = 1.2.34 release=a.1.1
 2023-10-07 12:00:00.02 MDT  1         002       status        info           alphanumeric value  sw_a          Message with alphanumberic value abc123def
