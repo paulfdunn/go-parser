@@ -224,6 +224,7 @@ func ExampleScanner_Replace() {
 		{RegexString: "(class poor delimiting)", Replacement: delimiterString + "${1}" + delimiterString},
 		{RegexString: `\s\s+`, Replacement: delimiterString},
 		{RegexString: DATE_TIME_REGEX},
+		{RegexString: `\.([0-9]+)\s+`, Replacement: delimiterString + "${1}" + delimiterString},
 	}
 	defaultInputs, _ := NewInputs("./test/testInputs.json")
 	defaultInputs.InputDelimiter = delimiter
@@ -252,7 +253,7 @@ func ExampleScanner_Replace() {
 	// 2023-10-07 12:00:00.01 MDT  0         000 class poor delimiting debug embedded values            sw_a          Message with embedded hex flag=0x01 and integer flag = 003
 	//
 	// Replaced data:
-	// 1696680000000000.01 MDT  0  000  class poor delimiting  debug embedded values  sw_a  Message with embedded hex flag=0x01 and integer flag = 003
+	// 1696680000  01  MDT  0  000  class poor delimiting  debug embedded values  sw_a  Message with embedded hex flag=0x01 and integer flag = 003
 }
 
 // ExampleScanner_Split shows how to use the Split function. In this case the data is then
@@ -261,11 +262,9 @@ func ExampleScanner_Replace() {
 // callers can choose to enforce the error, or not.
 func ExampleScanner_Split() {
 	delimiter := `\s\s+`
-	delimiterString := "  "
 	defaultInputs, _ := NewInputs("./test/testInputs.json")
 	defaultInputs.InputDelimiter = delimiter
 	defaultInputs.ExpectedFieldCount = 8
-	defaultInputs.Replacements = []*Replacement{{RegexString: `\s\s+`, Replacement: delimiterString}}
 	scnr := openFileScanner(filepath.Join(testDataDirectory, "test_split.txt"), *defaultInputs)
 	dataChan, errorChan := scnr.Read(100, 100)
 	fullData := []string{}
@@ -287,16 +286,67 @@ func ExampleScanner_Split() {
 	// Output:
 	//
 	// Input data:
-	// 2023-10-07 12:00:00.00 MDT  0         0         notification  debug          multi word type     sw_a          Debug SW message
-	// 2023-10-07 12:00:00.01 MDT  1         001       notification  info           SingleWordType      sw_b          Info SW message
+	// 2023-10-07 12:00:00 MDT  0         0         notification  debug          multi word type     sw_a          Debug SW message
+	// 2023-10-07 12:00:00 MDT  1         001       notification  info           SingleWordType      sw_b          Info SW message
 	// 2023-10-07 12:00:00.02 MDT  1         002       status        info           alphanumeric value  sw_a          Message with alphanumberic value abc123def
 	// 2023-10-07 12:00:00.03 MDT  1         003       status        info           alphanumeric value  sw_a          Message   with   extra   delimiters
 	//
 	// Split data:
-	// 2023-10-07 12:00:00.00 MDT|0|0|notification|debug|multi word type|sw_a|Debug SW message
-	// 2023-10-07 12:00:00.01 MDT|1|001|notification|info|SingleWordType|sw_b|Info SW message
+	// 2023-10-07 12:00:00 MDT|0|0|notification|debug|multi word type|sw_a|Debug SW message
+	// 2023-10-07 12:00:00 MDT|1|001|notification|info|SingleWordType|sw_b|Info SW message
 	// 2023-10-07 12:00:00.02 MDT|1|002|status|info|alphanumeric value|sw_a|Message with alphanumberic value abc123def
 	// 2023-10-07 12:00:00.03 MDT|1|003|status|info|alphanumeric value|sw_a|Message|with|extra|delimiters
+}
+
+// ExampleScanner_replaceAndSplit shows how to use the Split function. In this case the data is then
+// Join'ed back together just for output purposed.
+// Note that the call to Split drops the error that ExpectedFieldCount was incorrect.
+// callers can choose to enforce the error, or not.
+// Also note that the DATE_TIME_REGEX creates an additional column when used on datetime values with
+// fractional seconds, as the fractional seconds become an additional field. Storing epoch time reduces storage
+// compared to a string, but converting back to an SQL DATETIME is easier with seconds in their own field.
+func ExampleScanner_replaceAndSplit() {
+	delimiter := `\s\s`
+	delimiterString := "  "
+	rplc := []*Replacement{
+		{RegexString: `\s\s+`, Replacement: delimiterString},
+		{RegexString: DATE_TIME_REGEX},
+		{RegexString: `\.([0-9]+)\s+`, Replacement: delimiterString + "${1}" + delimiterString},
+	}
+	defaultInputs, _ := NewInputs("./test/testInputs.json")
+	defaultInputs.InputDelimiter = delimiter
+	defaultInputs.ExpectedFieldCount = 8
+	defaultInputs.Replacements = rplc
+	scnr := openFileScanner(filepath.Join(testDataDirectory, "test_split.txt"), *defaultInputs)
+	dataChan, errorChan := scnr.Read(100, 100)
+	fullData := []string{}
+	splitData := []string{}
+	for row := range dataChan {
+		fullData = append(fullData, row)
+		splits, _ := scnr.Split(scnr.Replace(row))
+		splitData = append(splitData, strings.Join(splits, "|"))
+	}
+	for err := range errorChan {
+		fmt.Println(err)
+	}
+
+	fmt.Println("\nInput data:")
+	fmt.Printf("%+v", strings.Join(fullData, "\n"))
+	fmt.Println("\n\nSplit data:")
+	fmt.Printf("%+v", strings.Join(splitData, "\n"))
+
+	// Output:
+	// Input data:
+	// 2023-10-07 12:00:00 MDT  0         0         notification  debug          multi word type     sw_a          Debug SW message
+	// 2023-10-07 12:00:00 MDT  1         001       notification  info           SingleWordType      sw_b          Info SW message
+	// 2023-10-07 12:00:00.02 MDT  1         002       status        info           alphanumeric value  sw_a          Message with alphanumberic value abc123def
+	// 2023-10-07 12:00:00.03 MDT  1         003       status        info           alphanumeric value  sw_a          Message   with   extra   delimiters
+	//
+	// Split data:
+	// 1696680000 MDT|0|0|notification|debug|multi word type|sw_a|Debug SW message
+	// 1696680000 MDT|1|001|notification|info|SingleWordType|sw_b|Info SW message
+	// 1696680000|02|MDT|1|002|status|info|alphanumeric value|sw_a|Message with alphanumberic value abc123def
+	// 1696680000|03|MDT|1|003|status|info|alphanumeric value|sw_a|Message|with|extra|delimiters
 }
 
 // ExampleScanner_Extract shows how to extract data and hash a field.

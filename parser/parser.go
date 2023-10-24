@@ -64,7 +64,7 @@ type Replacement struct {
 // dataDirectory - Directory with input files.
 // expectedFieldCount - Expected number of fields after calling Split.
 // extract - Extract objects; used for extracting values from rows into their own fields.
-// hashColumns - Column indeces of Split data used to create the hash.
+// hashColumns - Column indeces (zero index) of Split data used to create the hash.
 // inputDelimiter - Regexp used by Split to split rows of data.
 // negativeFilter - Regex used for negative filtering. Rows matching this value are excluded.
 // outDelimiter - String used to delimit parsed output data.
@@ -293,8 +293,16 @@ func (scnr *Scanner) SplitsExcludeHashColumns(splits []string, hashFormat HashFo
 // This can also be used to reduce storage space when storing in a database by replacing
 // multiple fields with a single hash, and keeping a separate table mapping hashes to
 // original field values.
-// Sqlite3 will import a hex value in the format x'deadbeef' as a blob, which will consume
-// half the space of the string equivalent.
+// Sqlite3 imports all data as pure text. However, if the hash is output as a hex string,
+// no leading '0x', then a new table can be created, all data copied from the original table but applying
+// UNHEX(hash), delete the old table, rename the new table to the old name, and vacuum.
+// I.E. if the hash were the only value in the table:
+// sqlite <your.db>
+// CREATE TABLE IF NOT EXISTS new_table (hash BLOB);
+// INSERT INTO new_table (hash) SELECT UNHEX(hash) FROM original_table;
+// DROP TABLE original_table;
+// ALTER TABLE new_table RENAME to original_table;
+// vacuum;
 func Hash(input string, format HashFormat) (string, error) {
 	h := md5.New()
 	var out string
@@ -306,7 +314,7 @@ func Hash(input string, format HashFormat) (string, error) {
 	case HASH_FORMAT_STRING:
 		out = fmt.Sprintf("0x%x", h.Sum(nil))
 	case HASH_FORMAT_SQLITE3:
-		out = fmt.Sprintf("x'%x'", h.Sum(nil))
+		out = fmt.Sprintf("%x", h.Sum(nil))
 	}
 	return out, err
 }
@@ -401,7 +409,7 @@ func SortedHashMapCounts(inputMap map[string]int) []string {
 // dateTimeToUnixEpoch is used to convert strings that match DATE_TIME_REGEX into Unix epoch
 func dateTimeToUnixEpoch(input []byte) []byte {
 	t, _ := time.Parse(time.DateTime, string(input))
-	return []byte(fmt.Sprint(t.UnixMicro()))
+	return []byte(fmt.Sprint(t.Unix()))
 }
 
 // setFilter is a convenience function to set the Scanner filters from inputs.
