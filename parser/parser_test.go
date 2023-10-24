@@ -349,7 +349,9 @@ func ExampleScanner_replaceAndSplit() {
 	// 1696680000|03|MDT|1|003|status|info|alphanumeric value|sw_a|Message|with|extra|delimiters
 }
 
-// ExampleScanner_Extract shows how to extract data and hash a field.
+// ExampleScanner_Extract_tosql shows how to extract data and hash a field, and also shows SQL output.
+// The assumption with SQL output is that you create a table that can take the maximum number of extracts
+// as NULLable strings.
 // Note that the order of the extracts is based on the order of the extract expression evaluation, NOT
 // the order of the data in the original string.
 // Hash - Note that hashing a field after extracting unique data results in equal hashes. This is
@@ -400,11 +402,14 @@ func ExampleScanner_Extract_andHash() {
 	defaultInputs.Replacements = []*Replacement{{RegexString: `\s\s+`, Replacement: delimiterString}}
 	defaultInputs.Extracts = extracts
 	defaultInputs.HashColumns = []int{3, 4, 5, 7}
+	defaultInputs.SqlQuoteColumns = []int{0, 4}
 	scnr := openFileScanner(filepath.Join(testDataDirectory, "test_extract.txt"), *defaultInputs)
 	dataChan, errorChan := scnr.Read(100, 100)
 	fullData := []string{}
 	extractData := []string{}
 	extractExcludeColumnsData := []string{}
+	sql := []string{}
+	sqlShort := []string{}
 	for row := range dataChan {
 		splits, _ := scnr.Split(row)
 		fullData = append(fullData, strings.Join(splits, "|"))
@@ -413,10 +418,13 @@ func ExampleScanner_Extract_andHash() {
 		extractData = append(extractData, strings.Join(splits, "|")+
 			"|EXTRACTS|"+strings.Join(extracts, "|")+
 			"| hash:"+hd)
-		spec, _ := scnr.SplitsExcludeHashColumns(splits, HASH_FORMAT_STRING)
-		extractExcludeColumnsData = append(extractExcludeColumnsData, strings.Join(spec, "|")+
+		sehc, _ := scnr.SplitsExcludeHashColumns(splits, HASH_FORMAT_STRING)
+		extractExcludeColumnsData = append(extractExcludeColumnsData, strings.Join(sehc, "|")+
 			"|EXTRACTS|"+strings.Join(extracts, "|")+
 			"| hash:"+hd)
+
+		sql = append(sql, scnr.SplitsToSql(10, "parsed", sehc, extracts))
+		sqlShort = append(sqlShort, scnr.SplitsToSql(7, "parsed", sehc, extracts))
 	}
 	for err := range errorChan {
 		fmt.Println(err)
@@ -429,6 +437,10 @@ func ExampleScanner_Extract_andHash() {
 	fmt.Printf("%+v", strings.Join(extractData, "\n"))
 	fmt.Println("\n\nExtract(ed) data excluding hashed columns:")
 	fmt.Printf("%+v", strings.Join(extractExcludeColumnsData, "\n"))
+	fmt.Println("\n\nSQL:")
+	fmt.Printf("%s", strings.Join(sql, "\n"))
+	fmt.Println("\n\nSQL with numColumns truncating extracts:")
+	fmt.Printf("%s", strings.Join(sqlShort, "\n"))
 
 	// Output:
 	// Hashing is enabled: true
@@ -458,4 +470,22 @@ func ExampleScanner_Extract_andHash() {
 	// 2023-10-07 12:00:00.04 MDT|1|004|0x1b7739c1e24d3a837e7821ecfb9a1be1|sw_a|EXTRACTS|3.cd|2|ABC.123_45|30| hash:0x1b7739c1e24d3a837e7821ecfb9a1be1
 	// 2023-10-07 12:00:00.05 MDT|1|005|0x1b7739c1e24d3a837e7821ecfb9a1be1|sw_a|EXTRACTS|4.ef|3|DEF.678_90|40| hash:0x1b7739c1e24d3a837e7821ecfb9a1be1
 	// 2023-10-07 12:00:00.06 MDT|1|006|0x1b7739c1e24d3a837e7821ecfb9a1be1|sw_a|EXTRACTS|5.gh|4|GHI.098_76|50| hash:0x1b7739c1e24d3a837e7821ecfb9a1be1
+	//
+	// SQL:
+	// INSERT INTO parsed VALUES('2023-10-07 12:00:00.00 MDT',0,0,0xa5a3dba744d3c6f1372f888f54447553,'sw_a','12.Ab.34','789',NULL,NULL,NULL);
+	// INSERT INTO parsed VALUES('2023-10-07 12:00:00.01 MDT',1,001,0x9bd3989cf85b232ddadd73a1a312b249,'sw_b','1.2.34','a.1.1',NULL,NULL,NULL);
+	// INSERT INTO parsed VALUES('2023-10-07 12:00:00.02 MDT',1,002,0x7f0e8136c3aec6bbde74dfbad17aef1c,'sw_a','abc123def',NULL,NULL,NULL,NULL);
+	// INSERT INTO parsed VALUES('2023-10-07 12:00:00.03 MDT',1,003,0x4907fb17a4212e2e09897fafa1cb758a,'sw_a','127.0.0.1:8080','1','x20','X30',NULL);
+	// INSERT INTO parsed VALUES('2023-10-07 12:00:00.04 MDT',1,004,0x1b7739c1e24d3a837e7821ecfb9a1be1,'sw_a','3.cd','2','ABC.123_45','30',NULL);
+	// INSERT INTO parsed VALUES('2023-10-07 12:00:00.05 MDT',1,005,0x1b7739c1e24d3a837e7821ecfb9a1be1,'sw_a','4.ef','3','DEF.678_90','40',NULL);
+	// INSERT INTO parsed VALUES('2023-10-07 12:00:00.06 MDT',1,006,0x1b7739c1e24d3a837e7821ecfb9a1be1,'sw_a','5.gh','4','GHI.098_76','50',NULL);
+	//
+	// SQL with numColumns truncating extracts:
+	// INSERT INTO parsed VALUES('2023-10-07 12:00:00.00 MDT',0,0,0xa5a3dba744d3c6f1372f888f54447553,'sw_a','12.Ab.34','789');
+	// INSERT INTO parsed VALUES('2023-10-07 12:00:00.01 MDT',1,001,0x9bd3989cf85b232ddadd73a1a312b249,'sw_b','1.2.34','a.1.1');
+	// INSERT INTO parsed VALUES('2023-10-07 12:00:00.02 MDT',1,002,0x7f0e8136c3aec6bbde74dfbad17aef1c,'sw_a','abc123def',NULL);
+	// INSERT INTO parsed VALUES('2023-10-07 12:00:00.03 MDT',1,003,0x4907fb17a4212e2e09897fafa1cb758a,'sw_a','127.0.0.1:8080','1');
+	// INSERT INTO parsed VALUES('2023-10-07 12:00:00.04 MDT',1,004,0x1b7739c1e24d3a837e7821ecfb9a1be1,'sw_a','3.cd','2');
+	// INSERT INTO parsed VALUES('2023-10-07 12:00:00.05 MDT',1,005,0x1b7739c1e24d3a837e7821ecfb9a1be1,'sw_a','4.ef','3');
+	// INSERT INTO parsed VALUES('2023-10-07 12:00:00.06 MDT',1,006,0x1b7739c1e24d3a837e7821ecfb9a1be1,'sw_a','5.gh','4');
 }

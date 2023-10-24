@@ -2,7 +2,7 @@
 Go-parser was written to support parsing of log files that were written for human consumption and are generally difficult to parse.
 
 ```
-pauldunn@PAULs-14-MBP go-parser % go build  
+pauldunn@PAULs-14-MBP go-parser % go build         
 pauldunn@PAULs-14-MBP go-parser % ./go-parser -help
 Usage of ./go-parser: note that parsed output will be written to /Users/pauldunn/tmp/go-parser, using the data file name with '.parsed.txt' appended as a file suffix 
   -datafile string
@@ -13,14 +13,16 @@ Usage of ./go-parser: note that parsed output will be written to /Users/pauldunn
     	Name of log file in /Users/pauldunn/tmp/go-parser; blank to print logs to terminal.
   -loglevel int
     	Logging level; default 1. Zero based index into: [debug info warning audit error] (default 1)
-  -sqlite3datatable string
-    	Used with sqlite3file to specify the table in which to import pased data; the table should already exist. (default "data")
+  -sqlcolumns int
+    	When > 0, output parsed data as SQL INSERT INTO statements, instead of delimited data. The value specifies the maximum number of columns output in the VALUES clause.
+  -sqldatatable string
+    	Used with sqlColumnsPtr to specify the table in which to import pased data; the table should already exist. (default "data")
+  -sqlhashtable string
+    	Used with sqlColumnsPtr to specify the table in which to import the hash table; the table should already exist. (default "hash")
   -sqlite3file string
     	Fully qualified path to a sqlite3 database file that has tables already created. Output files will be imported into sqlite3 then deleted.
-  -sqlite3hashtable string
-    	Used with sqlite3file to specify the table in which to import the hash table; the table should already exist. (default "hash")
   -stdout
-    	Output parsed data to STDOUT (in addition to file output) (default true)
+    	Output parsed data to STDOUT (in addition to file output)
   -threads int
     	Threads to use when processing a directory (default 6)
   -uniqueid string
@@ -36,6 +38,7 @@ Features:
 * Extraction - Supports "extraction". I.E. finding fields that match a regular expression, removing matches from input, and returning matches as an additional field. The main utility of extraction is when used with hashing to identify distinct row types. 
 * Hashing - After extracting values from field(s) (columns of data), hash the field(s) in order to allow pareto analysis. I.E. If the input has two rows with a given field containing `some critical event flag=1` and `some critical event flag=2`, you may really only want to know how many events occurred with `some critical event flag`. By extracting the `flag` value and hashing the result, those two fields are now the same and a pareto can be built on hashes. Keep a map[hash]field so you can decode the hashes back to something meaningful. Also note that several columns may be able to be combined into a single hash. This can greatly reduce storage costs by replacing many text fields, that are frequently repeated, with a single hash that is smaller in size.
 * Output directly to an Sqlite3 database.
+* Output SQL INSERT INTO statements for direct insertion into a database. 
 
 ## Input
 Inputs are supplied both with command line parameters, and an Inputs file that provides the parsing details specific to a type of input file. For details on Inputs see [parser.go](./parser/parser.go)
@@ -47,6 +50,8 @@ Output is written either to individual files, or an Sqlite3 database.
 Parsed output is written to <USER_HOME>/tmp/go-parser/<DATA_FILE_NAME>.parsed.txt; hashes are written to <USER_HOME>/tmp/go-parser/<DATA_FILE_NAME>.hashes.txt. While the output files are being written the suffix is ".locked". When the files are fully processed the ".locked" suffix is removed and callers can use the output files.    
 ### Sqlite3
 Providing the input parameters `sqlite3datatable`, `sqlite3file`, `sqlite3hashtable` will cause the ouput to be directly written to an Sqlite3 database. 
+### INSERT INTO
+Providing the `sqlout` parameter causes the output to be written as SQL `INSERT INTO` statements. `VALUES` in the statements are quotes according to `Scanner.SqlQuoteColumns`. The assumption here is that the caller will create a database that with the expected fields, plus a enough NULLable string columns to accept the maximum number of extracts.
 
 ## Examples
 For full working examples and additional documentation see [parser_test.go](./parser/parser_test.go)
@@ -75,25 +80,35 @@ go run ./go-parser.go -datafile="./parser/test/test_extract.txt" -inputfile="./i
 Example WITH hashing:
 <font size=0.5em>
 ```
-go run ./go-parser.go -datafile="./parser/test/test_extract.txt" -inputfile="./inputs/exampleInputWithHashing.json" -loglevel=0
-2023/10/11 18:28:37.498537 go-parser.go:77:   debug: user.Current(): &{Uid:501 Gid:20 Username:pauldunn Name:PAUL DUNN HomeDir:/Users/pauldunn}
-2023/10/11 18:28:37.498574 go-parser.go:78:    info: Data and logs being saved to directory: /Users/pauldunn/tmp/go-parser
+% go run ./go-parser.go -datafile="./parser/test/test_extract.txt" -inputfile="./inputs/exampleInputWithHashing.json" -loglevel=0 -sqlcolumns=8 -stdout
+2023/10/24 17:13:14.368923 go-parser.go:133:   debug: 
+2023/10/24 17:13:14.368982 go-parser.go:135:   debug: user.Current(): &{Uid:501 Gid:20 Username:pauldunn Name:PAUL DUNN HomeDir:/Users/pauldunn}
+2023/10/24 17:13:14.368996 go-parser.go:136:    info: Data and logs being saved to directory: /Users/pauldunn/tmp/go-parser
+2023/10/24 17:13:14.371088 go-parser.go:292:    info: parsed output file: /Users/pauldunn/tmp/go-parser/test_extract.txt.parsed.txtlocked
 ---------------- PARSED OUTPUT START ----------------
-2023-10-07 12:00:00.00 MDT|0|0|a07b3c1e3a1a0a0354fd900c1f38515d|EXTRACTS|12.Ab.34|789
-2023-10-07 12:00:00.01 MDT|1|001|11d590cff0915d91c47ee0cb22f33faa|EXTRACTS|1.2.34|a.1.1
-2023-10-07 12:00:00.02 MDT|1|002|2e7ddd79e7861f9157735943ba75e2b0|EXTRACTS|abc123def
-2023-10-07 12:00:00.03 MDT|1|003|03d287e66fa1648a82a312d09f998f53|EXTRACTS|127.0.0.1:8080|1|x20|X30
-2023-10-07 12:00:00.04 MDT|1|004|14a74c37f4ebbb911cd73aa6a00b7670|EXTRACTS|3.cd|2|ABC.123_45|30
-2023-10-07 12:00:00.05 MDT|1|005|14a74c37f4ebbb911cd73aa6a00b7670|EXTRACTS|4.ef|3|DEF.678_90|40
-2023-10-07 12:00:00.06 MDT|1|006|14a74c37f4ebbb911cd73aa6a00b7670|EXTRACTS|5.gh|4|GHI.098_76|50
+INSERT INTO parsed VALUES('2023-10-07 12:00:00.00 MDT',0,0,x'a07b3c1e3a1a0a0354fd900c1f38515d','12.Ab.34','789',NULL,NULL);
+INSERT INTO parsed VALUES('2023-10-07 12:00:00.01 MDT',1,001,x'11d590cff0915d91c47ee0cb22f33faa','1.2.34','a.1.1',NULL,NULL);
+INSERT INTO parsed VALUES('2023-10-07 12:00:00.02 MDT',1,002,x'2e7ddd79e7861f9157735943ba75e2b0','abc123def',NULL,NULL,NULL);
+INSERT INTO parsed VALUES('2023-10-07 12:00:00.03 MDT',1,003,x'03d287e66fa1648a82a312d09f998f53','127.0.0.1:8080','1','x20','X30');
+INSERT INTO parsed VALUES('2023-10-07 12:00:00.04 MDT',1,004,x'14a74c37f4ebbb911cd73aa6a00b7670','3.cd','2','ABC.123_45','30');
+INSERT INTO parsed VALUES('2023-10-07 12:00:00.05 MDT',1,005,x'14a74c37f4ebbb911cd73aa6a00b7670','4.ef','3','DEF.678_90','40');
+INSERT INTO parsed VALUES('2023-10-07 12:00:00.06 MDT',1,006,x'14a74c37f4ebbb911cd73aa6a00b7670','5.gh','4','GHI.098_76','50');
 ---------------- PARSED OUTPUT END   ----------------
-2023/10/11 18:28:37.499420 go-parser.go:207:    info: len(hashCounts)=5
-2023/10/11 18:28:37.499427 go-parser.go:208:   debug: Hashes and counts:
-2023/10/11 18:28:37.499433 go-parser.go:210:   debug: hash: 14a74c37f4ebbb911cd73aa6a00b7670, count: 3, value: status|info|alphanumeric value|sw_a|val={} flag = {} other {} on ({})
-2023/10/11 18:28:37.499441 go-parser.go:210:   debug: hash: 03d287e66fa1648a82a312d09f998f53, count: 1, value: status|info|alphanumeric value|sw_a|val:{} flag:{} other:{} on {}
-2023/10/11 18:28:37.499446 go-parser.go:210:   debug: hash: a07b3c1e3a1a0a0354fd900c1f38515d, count: 1, value: notification|debug|multi word type|sw_a|Unit {} message ({})
-2023/10/11 18:28:37.499451 go-parser.go:210:   debug: hash: 11d590cff0915d91c47ee0cb22f33faa, count: 1, value: notification|info|SingleWordType|sw_b|Info SW version = {} release={}
-2023/10/11 18:28:37.499456 go-parser.go:210:   debug: hash: 2e7ddd79e7861f9157735943ba75e2b0, count: 1, value: status|info|alphanumeric value|sw_a|Message with alphanumeric value {}
-2023/10/11 18:28:37.499460 go-parser.go:213:    info: total lines with unexpected number of fields=0
-```
+2023/10/24 17:13:14.371703 go-parser.go:373:    info: total lines with unexpected number of fields=0
+2023/10/24 17:13:14.371826 go-parser.go:387:    info: hashes output file: /Users/pauldunn/tmp/go-parser/test_extract.txt.hashes.txtlocked
+2023/10/24 17:13:14.371837 go-parser.go:395:    info: len(hashCounts)=5
+2023/10/24 17:13:14.371841 go-parser.go:396:    info: Hashes and counts:
+2023/10/24 17:13:14.371846 go-parser.go:399:    info: hash: x'14a74c37f4ebbb911cd73aa6a00b7670', count: 3, value: status|info|alphanumeric value|sw_a|val={} flag = {} other {} on ({})
+2023/10/24 17:13:14.371945 go-parser.go:399:    info: hash: x'a07b3c1e3a1a0a0354fd900c1f38515d', count: 1, value: notification|debug|multi word type|sw_a|Unit {} message ({})
+2023/10/24 17:13:14.371965 go-parser.go:399:    info: hash: x'11d590cff0915d91c47ee0cb22f33faa', count: 1, value: notification|info|SingleWordType|sw_b|Info SW version = {} release={}
+2023/10/24 17:13:14.371984 go-parser.go:399:    info: hash: x'2e7ddd79e7861f9157735943ba75e2b0', count: 1, value: status|info|alphanumeric value|sw_a|Message with alphanumberic value {}
+2023/10/24 17:13:14.371998 go-parser.go:399:    info: hash: x'03d287e66fa1648a82a312d09f998f53', count: 1, value: status|info|alphanumeric value|sw_a|val:{} flag:{} other:{} on {}
+---------------- HASHED OUTPUT START   ----------------
+INSERT INTO hash VALUES('x'14a74c37f4ebbb911cd73aa6a00b7670'', 'status|info|alphanumeric value|sw_a|val={} flag = {} other {} on ({})')
+INSERT INTO hash VALUES('x'a07b3c1e3a1a0a0354fd900c1f38515d'', 'notification|debug|multi word type|sw_a|Unit {} message ({})')
+INSERT INTO hash VALUES('x'11d590cff0915d91c47ee0cb22f33faa'', 'notification|info|SingleWordType|sw_b|Info SW version = {} release={}')
+INSERT INTO hash VALUES('x'2e7ddd79e7861f9157735943ba75e2b0'', 'status|info|alphanumeric value|sw_a|Message with alphanumberic value {}')
+INSERT INTO hash VALUES('x'03d287e66fa1648a82a312d09f998f53'', 'status|info|alphanumeric value|sw_a|val:{} flag:{} other:{} on {}')
+
+---------------- HASHED OUTPUT END   ----------------
 </font>

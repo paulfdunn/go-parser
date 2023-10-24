@@ -27,6 +27,20 @@ import (
 	"github.com/paulfdunn/logh"
 )
 
+type flags struct {
+	dataFilePath        string
+	hashFormat          parser.HashFormat
+	sqlite3FilePath     string
+	sqlDataTable        string
+	sqlHashTable        string
+	sqlColumns          int
+	stdout              bool
+	threads             int
+	uniqueId            string
+	uniqueIdRegexString string
+	uniqueIdRegex       *regexp.Regexp
+}
+
 const (
 	appName          = "go-parser"
 	lockedFileSuffix = "locked"
@@ -41,17 +55,18 @@ var (
 	lpf func(logh.LoghLevel, string, ...any)
 
 	// CLI flags
-	dataFilePtr         *string
-	inputFilePtr        *string
-	logFilePtr          *string
-	logLevel            *int
-	sqlite3FilePtr      *string
-	sqlite3DataTablePtr *string
-	sqlite3HashTablePtr *string
-	stdoutPtr           *bool
-	threadsPtr          *int
-	uniqueIdPtr         *string
-	uniqueIdRegexPtr    *string
+	dataFilePtr      *string
+	inputFilePtr     *string
+	logFilePtr       *string
+	logLevel         *int
+	sqlite3FilePtr   *string
+	sqlDataTablePtr  *string
+	sqlHashTablePtr  *string
+	sqlColumnsPtr    *int
+	stdoutPtr        *bool
+	threadsPtr       *int
+	uniqueIdPtr      *string
+	uniqueIdRegexPtr *string
 
 	// dataDirectorySuffix is appended to the users home directory.
 	dataDirectorySuffix = filepath.Join(`tmp`, appName)
@@ -90,9 +105,10 @@ func main() {
 	logLevel = flag.Int("loglevel", int(logh.Info), fmt.Sprintf("Logging level; default %d. Zero based index into: %v",
 		int(logh.Info), logh.DefaultLevels))
 	sqlite3FilePtr = flag.String("sqlite3file", "", "Fully qualified path to a sqlite3 database file that has tables already created. Output files will be imported into sqlite3 then deleted.")
-	sqlite3DataTablePtr = flag.String("sqlite3datatable", "data", "Used with sqlite3file to specify the table in which to import pased data; the table should already exist.")
-	sqlite3HashTablePtr = flag.String("sqlite3hashtable", "hash", "Used with sqlite3file to specify the table in which to import the hash table; the table should already exist.")
-	stdoutPtr = flag.Bool("stdout", true, "Output parsed data to STDOUT (in addition to file output)")
+	sqlDataTablePtr = flag.String("sqldatatable", "data", "Used with sqlColumnsPtr to specify the table in which to import pased data; the table should already exist.")
+	sqlHashTablePtr = flag.String("sqlhashtable", "hash", "Used with sqlColumnsPtr to specify the table in which to import the hash table; the table should already exist.")
+	sqlColumnsPtr = flag.Int("sqlcolumns", 0, "When > 0, output parsed data as SQL INSERT INTO statements, instead of delimited data. The value specifies the maximum number of columns output in the VALUES clause.")
+	stdoutPtr = flag.Bool("stdout", false, "Output parsed data to STDOUT (in addition to file output)")
 	threadsPtr = flag.Int("threads", 6, "Threads to use when processing a directory")
 	uniqueIdPtr = flag.String("uniqueid", "", "Unique ID that is output with each parsed row.")
 	uniqueIdRegexPtr = flag.String("uniqueidregex", "", "Regex that will be called on the input data to find a unique ID that "+
@@ -125,6 +141,23 @@ func main() {
 		os.Exit(7)
 	}
 
+	hashFormat := parser.HASH_FORMAT_STRING
+	if *sqlColumnsPtr > 0 {
+		hashFormat = parser.HASH_FORMAT_SQL
+	}
+	flags := flags{
+		dataFilePath:        *dataFilePtr,
+		hashFormat:          hashFormat,
+		sqlite3FilePath:     *sqlite3FilePtr,
+		sqlDataTable:        *sqlDataTablePtr,
+		sqlHashTable:        *sqlHashTablePtr,
+		sqlColumns:          *sqlColumnsPtr,
+		stdout:              *stdoutPtr,
+		threads:             *threadsPtr,
+		uniqueId:            *uniqueIdPtr,
+		uniqueIdRegexString: *uniqueIdRegexPtr,
+	}
+
 	// The `datafile` CLI parameter overrides the Inputs.DataDirectory.
 	if *dataFilePtr == "" && inputs.DataDirectory != "" {
 		if _, err := os.Stat(inputs.DataDirectory); os.IsNotExist(err) {
@@ -142,7 +175,7 @@ func main() {
 		// Otherwise watch the DataDirectory, forever.
 		loops := 0
 		for {
-			parseFileEngine(inputs, files, *threadsPtr, *sqlite3FilePtr, *sqlite3DataTablePtr, *sqlite3HashTablePtr)
+			parseFileEngine(inputs, files, flags)
 			if inputs.ProcessedInputDirectory == "" {
 				break
 			}
@@ -153,7 +186,7 @@ func main() {
 		}
 
 	} else {
-		parseFile(inputs, *dataFilePtr, *sqlite3FilePtr, *sqlite3DataTablePtr, *sqlite3HashTablePtr)
+		parseFile(inputs, flags)
 	}
 
 	lpf(logh.Info, "%s processing complete...", appName)
@@ -162,19 +195,19 @@ func main() {
 
 // parseFileEngine will use Go routines to start multiple instances of parseFile and process all
 // files in the Inputs.DataDirectory.
-func parseFileEngine(inputs *parser.Inputs, fileList []fs.DirEntry, threads int,
-	sqlite3FilePath string, sqlite3DataTable string, sqlite3HashTable string) error {
-	tasks := make(chan string, threads)
+func parseFileEngine(inputs *parser.Inputs, fileList []fs.DirEntry, flags flags) error {
+	tasks := make(chan string, flags.threads)
 	// Make sure the error buffer cannot fill up and cause a deadlock.
 	// errorOut := make(chan error, threads)
 
 	// Start number of Go Routines that will call s3mftDownloadFile
 	var wg sync.WaitGroup
-	for i := 0; i < threads; i++ {
+	for i := 0; i < flags.threads; i++ {
 		wg.Add(1)
 		go func() {
 			for file := range tasks {
-				parseFile(inputs, file, sqlite3FilePath, sqlite3DataTable, sqlite3HashTable)
+				flags.dataFilePath = file
+				parseFile(inputs, flags)
 			}
 			wg.Done()
 		}()
@@ -212,8 +245,7 @@ func parseFileEngine(inputs *parser.Inputs, fileList []fs.DirEntry, threads int,
 // parseFile uses an input file from inputPath to process a data file from dataFilePath.
 // While the output files are being written the suffix is ".locked". When the files are fully
 // processed the ".locked" suffix is removed and callers can use the output files.
-func parseFile(inputs *parser.Inputs, dataFilePath string, sqlite3FilePath string,
-	sqlite3DataTable string, sqlite3HashTable string) {
+func parseFile(inputs *parser.Inputs, flags flags) {
 
 	// Create the scanner and open the file.
 	scnr, err := parser.NewScanner(*inputs)
@@ -221,35 +253,30 @@ func parseFile(inputs *parser.Inputs, dataFilePath string, sqlite3FilePath strin
 		lpf(logh.Error, "calling NewScanner: %s", err)
 		os.Exit(9)
 	}
-	err = scnr.OpenFileScanner(dataFilePath)
+	err = scnr.OpenFileScanner(flags.dataFilePath)
 	if err != nil {
 		lpf(logh.Error, "calling OpenScanner: %s", err)
 		os.Exit(13)
 	}
 
-	hashFormat := parser.HASH_FORMAT_STRING
-	if sqlite3FilePath != "" {
-		hashFormat = parser.HASH_FORMAT_SQLITE3
-	}
-
 	// Process all data.
-	parsedOutputFilePath := filepath.Join(dataDirectory, filepath.Base(dataFilePath)+parsedOutputFileSuffix+lockedFileSuffix)
-	hashesOutputFilePath := filepath.Join(dataDirectory, filepath.Base(dataFilePath)+hashesOutputFileSuffix+lockedFileSuffix)
-	processScanner(scnr, dataFilePath, parsedOutputFilePath, hashesOutputFilePath, hashFormat)
+	parsedOutputFilePath := filepath.Join(dataDirectory, filepath.Base(flags.dataFilePath)+parsedOutputFileSuffix+lockedFileSuffix)
+	hashesOutputFilePath := filepath.Join(dataDirectory, filepath.Base(flags.dataFilePath)+hashesOutputFileSuffix+lockedFileSuffix)
+	processScanner(scnr, flags, parsedOutputFilePath, hashesOutputFilePath)
 	scnr.Shutdown()
 
 	// Rename the output files, removing the lockedFileSuffix
-	parsedOutputFilePathUnlocked := filepath.Join(dataDirectory, filepath.Base(dataFilePath)+parsedOutputFileSuffix)
+	parsedOutputFilePathUnlocked := filepath.Join(dataDirectory, filepath.Base(flags.dataFilePath)+parsedOutputFileSuffix)
 	os.Rename(parsedOutputFilePath, parsedOutputFilePathUnlocked)
-	hashesOutputFilePathUnlocked := filepath.Join(dataDirectory, filepath.Base(dataFilePath)+hashesOutputFileSuffix)
+	hashesOutputFilePathUnlocked := filepath.Join(dataDirectory, filepath.Base(flags.dataFilePath)+hashesOutputFileSuffix)
 	os.Rename(hashesOutputFilePath, hashesOutputFilePathUnlocked)
 
-	if sqlite3FilePath != "" {
-		if scnr.HashingEnabled() && sqlite3HashTable != "" {
-			sqlite3Import(inputs.OutputDelimiter, sqlite3FilePath, hashesOutputFilePathUnlocked, sqlite3HashTable)
+	if flags.sqlite3FilePath != "" {
+		if scnr.HashingEnabled() && flags.sqlHashTable != "" {
+			sqlite3Import(flags.sqlite3FilePath, hashesOutputFilePathUnlocked)
 			os.Remove(hashesOutputFilePathUnlocked)
 		}
-		sqlite3Import(inputs.OutputDelimiter, sqlite3FilePath, parsedOutputFilePathUnlocked, sqlite3DataTable)
+		sqlite3Import(flags.sqlite3FilePath, parsedOutputFilePathUnlocked)
 		os.Remove(parsedOutputFilePathUnlocked)
 	}
 }
@@ -257,8 +284,7 @@ func parseFile(inputs *parser.Inputs, dataFilePath string, sqlite3FilePath strin
 // processScanner takes a scanner, (optionally) finds the unique ID in the input to append to each row,
 // then replaces, spits, extracts, and hashes all data from the scanner. The parsed data is
 // saved to the output, and  hashes saved to a seperate file.
-func processScanner(scnr *parser.Scanner, dataFilePath string,
-	parsedOutputFilePath string, hashesOutputFilePath string, hashFormat parser.HashFormat) {
+func processScanner(scnr *parser.Scanner, flags flags, parsedOutputFilePath string, hashesOutputFilePath string) {
 
 	dataChan, errorChan := scnr.Read(100, 100)
 
@@ -272,28 +298,25 @@ func processScanner(scnr *parser.Scanner, dataFilePath string,
 	outputWriter := bufio.NewWriter(parsedOutputFile)
 	defer outputWriter.Flush()
 
-	var uniqueId string
-	var uniqueIdRegex *regexp.Regexp
 	unexpectedFieldCount := 0
-	if *uniqueIdRegexPtr != "" {
-		uniqueIdRegex = regexp.MustCompile(*uniqueIdRegexPtr)
+	if flags.uniqueIdRegexString != "" {
+		flags.uniqueIdRegex = regexp.MustCompile(flags.uniqueIdRegexString)
 	} else if *uniqueIdPtr != "" {
-		uniqueId = *uniqueIdPtr
-		lpf(logh.Info, "UniqueID from input: %s", uniqueId)
-		uniqueId += scnr.OutputDelimiter
+		lpf(logh.Info, "UniqueID from input: %s", flags.uniqueId)
+		flags.uniqueId += scnr.OutputDelimiter
 	}
 
-	if *stdoutPtr {
+	if flags.stdout {
 		fmt.Println("---------------- PARSED OUTPUT START ----------------")
 	}
 
 	for row := range dataChan {
-		if uniqueId == "" && uniqueIdRegex != nil {
-			match := uniqueIdRegex.FindStringSubmatch(row)
+		if flags.uniqueId == "" && flags.uniqueIdRegex != nil {
+			match := flags.uniqueIdRegex.FindStringSubmatch(row)
 			if match != nil {
-				uniqueId = match[1]
-				lpf(logh.Info, "UniqueID found via regex: %s", uniqueId)
-				uniqueId += scnr.OutputDelimiter
+				flags.uniqueId = match[1]
+				lpf(logh.Info, "UniqueID found via regex: %s", flags.uniqueId)
+				flags.uniqueId += scnr.OutputDelimiter
 			}
 		}
 
@@ -314,22 +337,37 @@ func processScanner(scnr *parser.Scanner, dataFilePath string,
 		}
 
 		if scnr.HashingEnabled() {
-			sehc, err := scnr.SplitsExcludeHashColumns(splits, hashFormat)
+			sehc, err := scnr.SplitsExcludeHashColumns(splits, flags.hashFormat)
 			if err != nil {
 				lpf(logh.Error, "calling SplitsExcludeHashColumns: %s", err)
 			}
-			out := uniqueId + strings.Join(sehc, scnr.OutputDelimiter) + "|EXTRACTS|" + strings.Join(extracts, scnr.OutputDelimiter)
+			var out string
+
+			if flags.sqlColumns > 0 {
+				out = flags.uniqueId + scnr.SplitsToSql(flags.sqlColumns, flags.sqlDataTable, sehc, extracts)
+			} else {
+				out = flags.uniqueId + strings.Join(sehc, scnr.OutputDelimiter) + "|EXTRACTS|" + strings.Join(extracts, scnr.OutputDelimiter)
+			}
 			outputWriter.WriteString(out + "\n")
-			if *stdoutPtr {
+			if flags.stdout {
 				fmt.Println(out)
 			}
 		} else {
-			out := uniqueId + strings.Join(splits, scnr.OutputDelimiter) + "|EXTRACTS|" + strings.Join(extracts, scnr.OutputDelimiter)
+			var out string
+			if flags.sqlColumns > 0 {
+				out = flags.uniqueId + scnr.SplitsToSql(flags.sqlColumns, flags.sqlDataTable, splits, extracts)
+			} else {
+				out = flags.uniqueId + strings.Join(splits, scnr.OutputDelimiter) + "|EXTRACTS|" + strings.Join(extracts, scnr.OutputDelimiter)
+			}
 			outputWriter.WriteString(out + "\n")
-			if *stdoutPtr {
+			if flags.stdout {
 				fmt.Println(out)
 			}
 		}
+	}
+
+	if flags.stdout {
+		fmt.Println("---------------- PARSED OUTPUT END   ----------------")
 	}
 
 	lpf(logh.Info, "total lines with unexpected number of fields=%d", unexpectedFieldCount)
@@ -337,17 +375,13 @@ func processScanner(scnr *parser.Scanner, dataFilePath string,
 		lp(logh.Error, err)
 	}
 
-	if *stdoutPtr {
-		fmt.Println("---------------- PARSED OUTPUT END   ----------------")
-	}
-
 	if scnr.HashingEnabled() {
-		saveHashes(scnr.HashCounts, scnr.HashMap, hashesOutputFilePath, dataFilePath)
+		saveHashes(scnr.HashCounts, scnr.HashMap, hashesOutputFilePath, flags)
 	}
 }
 
 // saveHashes writes the hashes out to a file for later importing into a database.
-func saveHashes(hashCounts map[string]int, hashMap map[string]string, hashesOutputFilePath string, dataFilePath string) {
+func saveHashes(hashCounts map[string]int, hashMap map[string]string, hashesOutputFilePath string, flags flags) {
 	// Open output files
 	hashesOutputFile, err := os.Create(hashesOutputFilePath)
 	lpf(logh.Info, "hashes output file: %s", hashesOutputFilePath)
@@ -360,23 +394,39 @@ func saveHashes(hashCounts map[string]int, hashMap map[string]string, hashesOutp
 	sortedHashKeys := parser.SortedHashMapCounts(hashCounts)
 	lpf(logh.Info, "len(hashCounts)=%d", len(hashCounts))
 	lpf(logh.Info, "Hashes and counts:")
+	var dump string
 	for _, v := range sortedHashKeys {
 		lpf(logh.Info, "hash: %s, count: %d, value: %s", v, hashCounts[v], hashMap[v])
-		out := strings.Join([]string{v, hashMap[v]}, hashesOutputDelimiter)
-		_, err := hashesOutputFile.WriteString(out + "\n")
+		var out string
+		if flags.sqlColumns > 0 {
+			out = fmt.Sprintf("INSERT INTO %s VALUES(%s, '%s');", flags.sqlHashTable, v, hashMap[v]) + "\n"
+		} else {
+			out = strings.Join([]string{v, hashMap[v]}, hashesOutputDelimiter) + "\n"
+		}
+		dump += out
+		_, err := hashesOutputFile.WriteString(out)
 		if err != nil {
 			lpf(logh.Error, "calling hashesOutputFile.WriteString: %s", err)
 		}
 	}
+
+	if flags.stdout {
+		fmt.Println("---------------- HASHED OUTPUT START   ----------------")
+		fmt.Println(dump)
+		fmt.Println("---------------- HASHED OUTPUT END   ----------------")
+	}
+
 }
 
-// sqlite3Import is used to import the delimited output files into a sqlite3 database.
+// sqlite3Import is used to import the SQL output into a sqlite3 database.
 // Sqlite3 will create the file if it does not exist. It is not great, as that means the user
 // didn't create the table either. In which case, sqlite3 does the best it can and imports.
-func sqlite3Import(outputDelimiter, sqlite3FilePath, outputFilePath, sqlite3Table string) {
+func sqlite3Import(sqlite3FilePath, outputFilePath string) {
+	b, _ := os.ReadFile(outputFilePath)
+	lpf(logh.Debug, string(b))
 	// if _, err := os.Stat(sqlite3FilePath); err == nil {
-	args := []string{"-separator", outputDelimiter, sqlite3FilePath}
-	sqc := fmt.Sprintf(".import %s %s", outputFilePath, sqlite3Table)
+	args := []string{sqlite3FilePath}
+	sqc := fmt.Sprintf(".read %s", outputFilePath)
 	cmd := exec.Command("sqlite3", args...)
 	stdin, err := cmd.StdinPipe()
 	if err != nil {

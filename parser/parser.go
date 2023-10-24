@@ -20,6 +20,8 @@ import (
 	"sort"
 	"strings"
 	"time"
+
+	"golang.org/x/exp/slices"
 )
 
 // Extract objects determine how extractions (Scanner.Extract) occur.
@@ -49,6 +51,7 @@ type Inputs struct {
 	PositiveFilter          string
 	ProcessedInputDirectory string
 	Replacements            []*Replacement
+	SqlQuoteColumns         []int
 }
 
 // Replacement objects determine how replacements (Scanner.Replacement) occur.
@@ -71,6 +74,7 @@ type Replacement struct {
 // positiveFilter - Regex used for positive filtering. Rows must match to be included.
 // processedInputDirectory - When Read completes, move the file to this directory; empty string means the file is left in place.
 // replace - Replacement values used for performing regex replacements on input data.
+// sqlQuoteColumns - When using SQL ouput, these columns will be quoted.
 type Scanner struct {
 	HashColumns     []int
 	HashCounts      map[string]int
@@ -89,6 +93,7 @@ type Scanner struct {
 	processedInputDirectory string
 	replace                 []*Replacement
 	scanner                 *bufio.Scanner
+	sqlQuoteColumns         []int
 }
 
 // The hash can be output in a pure string format (I.E. "0xdeadbeef") or a format compatible
@@ -97,7 +102,7 @@ type HashFormat int
 
 const (
 	HASH_FORMAT_STRING HashFormat = iota
-	HASH_FORMAT_SQLITE3
+	HASH_FORMAT_SQL
 )
 
 const (
@@ -288,21 +293,43 @@ func (scnr *Scanner) SplitsExcludeHashColumns(splits []string, hashFormat HashFo
 	return splitsExcludeHashColumns, nil
 }
 
+// SplitsToSql will take a Split splits and convert it into an SQL INSERT INTO statement.
+// All values are output as text. numColumns of Values will be provided, NULL padded.
+// The table should be created with nullable text columns to receive as many extracts as
+// might be produced. If the length of splits exceeds numColumns, the VALUES will be truncated.
+// splits will be padded according to Scanner.SqlQuoteColumns, all extracts are quoted.
+func (scnr *Scanner) SplitsToSql(numColumns int, table string, splits []string, extracts []string) string {
+	out := fmt.Sprintf("INSERT INTO %s VALUES(", table)
+	sliceIn := append(splits, extracts...)
+
+	// Turn splits and extract into a comma separated string, quoted as specified.
+	outs := make([]string, 0, len(sliceIn))
+	for i := 0; i < min(len(sliceIn), numColumns); i++ {
+		if slices.Contains(scnr.sqlQuoteColumns, i) || i >= len(splits) {
+			outs = append(outs, fmt.Sprintf("'%s'", sliceIn[i]))
+		} else {
+			outs = append(outs, sliceIn[i])
+		}
+	}
+	out += strings.Join(outs, ",")
+
+	padLength := numColumns - len(outs)
+	if padLength > 0 {
+		pad := make([]string, padLength)
+		for i := 0; i < padLength; i++ {
+			pad[i] = "NULL"
+		}
+		out += "," + strings.Join(pad, ",")
+	}
+	out += ");"
+	return out
+}
+
 // Hash returns the hex string of the MD5 hash of the input. Call this on fields where
 // values have been extracted in order to perform pareto analysis on the resulting hashes.
 // This can also be used to reduce storage space when storing in a database by replacing
 // multiple fields with a single hash, and keeping a separate table mapping hashes to
 // original field values.
-// Sqlite3 imports all data as pure text. However, if the hash is output as a hex string,
-// no leading '0x', then a new table can be created, all data copied from the original table but applying
-// UNHEX(hash), delete the old table, rename the new table to the old name, and vacuum.
-// I.E. if the hash were the only value in the table:
-// sqlite <your.db>
-// CREATE TABLE IF NOT EXISTS new_table (hash BLOB);
-// INSERT INTO new_table (hash) SELECT UNHEX(hash) FROM original_table;
-// DROP TABLE original_table;
-// ALTER TABLE new_table RENAME to original_table;
-// vacuum;
 func Hash(input string, format HashFormat) (string, error) {
 	h := md5.New()
 	var out string
@@ -312,9 +339,9 @@ func Hash(input string, format HashFormat) (string, error) {
 	}
 	switch format {
 	case HASH_FORMAT_STRING:
-		out = fmt.Sprintf("0x%x", h.Sum(nil))
-	case HASH_FORMAT_SQLITE3:
-		out = fmt.Sprintf("%x", h.Sum(nil))
+		out = fmt.Sprintf("'0x%x'", h.Sum(nil))
+	case HASH_FORMAT_SQL:
+		out = fmt.Sprintf("x'%x'", h.Sum(nil))
 	}
 	return out, err
 }
@@ -352,6 +379,7 @@ func NewScanner(inputs Inputs) (*Scanner, error) {
 		dataDirectory:      inputs.DataDirectory,
 		inputDelimiter:     rgx,
 		expectedFieldCount: inputs.ExpectedFieldCount,
+		sqlQuoteColumns:    inputs.SqlQuoteColumns,
 	}
 
 	err = scnr.setFilter(false, inputs.NegativeFilter)
