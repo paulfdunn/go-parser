@@ -1,3 +1,8 @@
 *.code-workspace
 go-parser
+*.debug
 *.db
+*.tar
+*.tar.gz
+*.db-journal
+*.DS_Store

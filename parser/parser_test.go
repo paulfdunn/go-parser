@@ -454,38 +454,38 @@ func ExampleScanner_Extract_andHash() {
 	// 2023-10-07 12:00:00.06 MDT|1|006|status|info|alphanumeric value|sw_a|val=4 flag = 50 other 5.gh on (GHI.098_76)
 	//
 	// Extract(ed) data:
-	// 2023-10-07 12:00:00.00 MDT|0|0|notification|debug|multi word type|sw_a|Unit {} message ({})|EXTRACTS|12.Ab.34|789| hash:0xa5a3dba744d3c6f1372f888f54447553
-	// 2023-10-07 12:00:00.01 MDT|1|001|notification|info|SingleWordType|sw_b|Info SW version = {} release={}|EXTRACTS|1.2.34|a.1.1| hash:0x9bd3989cf85b232ddadd73a1a312b249
-	// 2023-10-07 12:00:00.02 MDT|1|002|status|info|alphanumeric value|sw_a|Message with alphanumberic value {}|EXTRACTS|abc123def| hash:0x7f0e8136c3aec6bbde74dfbad17aef1c
-	// 2023-10-07 12:00:00.03 MDT|1|003|status|info|alphanumeric value|sw_a|val:{} flag:{} other:{} on {}|EXTRACTS|127.0.0.1:8080|1|x20|X30| hash:0x4907fb17a4212e2e09897fafa1cb758a
-	// 2023-10-07 12:00:00.04 MDT|1|004|status|info|alphanumeric value|sw_a|val={} flag = {} other {} on ({})|EXTRACTS|3.cd|2|ABC.123_45|30| hash:0x1b7739c1e24d3a837e7821ecfb9a1be1
-	// 2023-10-07 12:00:00.05 MDT|1|005|status|info|alphanumeric value|sw_a|val={} flag = {} other {} on ({})|EXTRACTS|4.ef|3|DEF.678_90|40| hash:0x1b7739c1e24d3a837e7821ecfb9a1be1
-	// 2023-10-07 12:00:00.06 MDT|1|006|status|info|alphanumeric value|sw_a|val={} flag = {} other {} on ({})|EXTRACTS|5.gh|4|GHI.098_76|50| hash:0x1b7739c1e24d3a837e7821ecfb9a1be1
+	// 2023-10-07 12:00:00.00 MDT|0|0|notification|debug|multi word type|sw_a|Unit {} message ({})|EXTRACTS|12.Ab.34|789| hash:'0xa5a3dba744d3c6f1372f888f54447553'
+	// 2023-10-07 12:00:00.01 MDT|1|001|notification|info|SingleWordType|sw_b|Info SW version = {} release={}|EXTRACTS|1.2.34|a.1.1| hash:'0x9bd3989cf85b232ddadd73a1a312b249'
+	// 2023-10-07 12:00:00.02 MDT|1|002|status|info|alphanumeric value|sw_a|Message with alphanumberic value {}|EXTRACTS|abc123def| hash:'0x7f0e8136c3aec6bbde74dfbad17aef1c'
+	// 2023-10-07 12:00:00.03 MDT|1|003|status|info|alphanumeric value|sw_a|val:{} flag:{} other:{} on {}|EXTRACTS|127.0.0.1:8080|1|x20|X30| hash:'0x4907fb17a4212e2e09897fafa1cb758a'
+	// 2023-10-07 12:00:00.04 MDT|1|004|status|info|alphanumeric value|sw_a|val={} flag = {} other {} on ({})|EXTRACTS|3.cd|2|ABC.123_45|30| hash:'0x1b7739c1e24d3a837e7821ecfb9a1be1'
+	// 2023-10-07 12:00:00.05 MDT|1|005|status|info|alphanumeric value|sw_a|val={} flag = {} other {} on ({})|EXTRACTS|4.ef|3|DEF.678_90|40| hash:'0x1b7739c1e24d3a837e7821ecfb9a1be1'
+	// 2023-10-07 12:00:00.06 MDT|1|006|status|info|alphanumeric value|sw_a|val={} flag = {} other {} on ({})|EXTRACTS|5.gh|4|GHI.098_76|50| hash:'0x1b7739c1e24d3a837e7821ecfb9a1be1'
 	//
 	// Extract(ed) data excluding hashed columns:
-	// 2023-10-07 12:00:00.00 MDT|0|0|0xa5a3dba744d3c6f1372f888f54447553|sw_a|EXTRACTS|12.Ab.34|789| hash:0xa5a3dba744d3c6f1372f888f54447553
-	// 2023-10-07 12:00:00.01 MDT|1|001|0x9bd3989cf85b232ddadd73a1a312b249|sw_b|EXTRACTS|1.2.34|a.1.1| hash:0x9bd3989cf85b232ddadd73a1a312b249
-	// 2023-10-07 12:00:00.02 MDT|1|002|0x7f0e8136c3aec6bbde74dfbad17aef1c|sw_a|EXTRACTS|abc123def| hash:0x7f0e8136c3aec6bbde74dfbad17aef1c
-	// 2023-10-07 12:00:00.03 MDT|1|003|0x4907fb17a4212e2e09897fafa1cb758a|sw_a|EXTRACTS|127.0.0.1:8080|1|x20|X30| hash:0x4907fb17a4212e2e09897fafa1cb758a
-	// 2023-10-07 12:00:00.04 MDT|1|004|0x1b7739c1e24d3a837e7821ecfb9a1be1|sw_a|EXTRACTS|3.cd|2|ABC.123_45|30| hash:0x1b7739c1e24d3a837e7821ecfb9a1be1
-	// 2023-10-07 12:00:00.05 MDT|1|005|0x1b7739c1e24d3a837e7821ecfb9a1be1|sw_a|EXTRACTS|4.ef|3|DEF.678_90|40| hash:0x1b7739c1e24d3a837e7821ecfb9a1be1
-	// 2023-10-07 12:00:00.06 MDT|1|006|0x1b7739c1e24d3a837e7821ecfb9a1be1|sw_a|EXTRACTS|5.gh|4|GHI.098_76|50| hash:0x1b7739c1e24d3a837e7821ecfb9a1be1
+	// 2023-10-07 12:00:00.00 MDT|0|0|'0xa5a3dba744d3c6f1372f888f54447553'|sw_a|EXTRACTS|12.Ab.34|789| hash:'0xa5a3dba744d3c6f1372f888f54447553'
+	// 2023-10-07 12:00:00.01 MDT|1|001|'0x9bd3989cf85b232ddadd73a1a312b249'|sw_b|EXTRACTS|1.2.34|a.1.1| hash:'0x9bd3989cf85b232ddadd73a1a312b249'
+	// 2023-10-07 12:00:00.02 MDT|1|002|'0x7f0e8136c3aec6bbde74dfbad17aef1c'|sw_a|EXTRACTS|abc123def| hash:'0x7f0e8136c3aec6bbde74dfbad17aef1c'
+	// 2023-10-07 12:00:00.03 MDT|1|003|'0x4907fb17a4212e2e09897fafa1cb758a'|sw_a|EXTRACTS|127.0.0.1:8080|1|x20|X30| hash:'0x4907fb17a4212e2e09897fafa1cb758a'
+	// 2023-10-07 12:00:00.04 MDT|1|004|'0x1b7739c1e24d3a837e7821ecfb9a1be1'|sw_a|EXTRACTS|3.cd|2|ABC.123_45|30| hash:'0x1b7739c1e24d3a837e7821ecfb9a1be1'
+	// 2023-10-07 12:00:00.05 MDT|1|005|'0x1b7739c1e24d3a837e7821ecfb9a1be1'|sw_a|EXTRACTS|4.ef|3|DEF.678_90|40| hash:'0x1b7739c1e24d3a837e7821ecfb9a1be1'
+	// 2023-10-07 12:00:00.06 MDT|1|006|'0x1b7739c1e24d3a837e7821ecfb9a1be1'|sw_a|EXTRACTS|5.gh|4|GHI.098_76|50| hash:'0x1b7739c1e24d3a837e7821ecfb9a1be1'
 	//
 	// SQL:
-	// INSERT INTO parsed VALUES('2023-10-07 12:00:00.00 MDT',0,0,0xa5a3dba744d3c6f1372f888f54447553,'sw_a','12.Ab.34','789',NULL,NULL,NULL);
-	// INSERT INTO parsed VALUES('2023-10-07 12:00:00.01 MDT',1,001,0x9bd3989cf85b232ddadd73a1a312b249,'sw_b','1.2.34','a.1.1',NULL,NULL,NULL);
-	// INSERT INTO parsed VALUES('2023-10-07 12:00:00.02 MDT',1,002,0x7f0e8136c3aec6bbde74dfbad17aef1c,'sw_a','abc123def',NULL,NULL,NULL,NULL);
-	// INSERT INTO parsed VALUES('2023-10-07 12:00:00.03 MDT',1,003,0x4907fb17a4212e2e09897fafa1cb758a,'sw_a','127.0.0.1:8080','1','x20','X30',NULL);
-	// INSERT INTO parsed VALUES('2023-10-07 12:00:00.04 MDT',1,004,0x1b7739c1e24d3a837e7821ecfb9a1be1,'sw_a','3.cd','2','ABC.123_45','30',NULL);
-	// INSERT INTO parsed VALUES('2023-10-07 12:00:00.05 MDT',1,005,0x1b7739c1e24d3a837e7821ecfb9a1be1,'sw_a','4.ef','3','DEF.678_90','40',NULL);
-	// INSERT INTO parsed VALUES('2023-10-07 12:00:00.06 MDT',1,006,0x1b7739c1e24d3a837e7821ecfb9a1be1,'sw_a','5.gh','4','GHI.098_76','50',NULL);
+	// INSERT INTO parsed VALUES('2023-10-07 12:00:00.00 MDT',0,0,'0xa5a3dba744d3c6f1372f888f54447553','sw_a','12.Ab.34','789',NULL,NULL,NULL);
+	// INSERT INTO parsed VALUES('2023-10-07 12:00:00.01 MDT',1,001,'0x9bd3989cf85b232ddadd73a1a312b249','sw_b','1.2.34','a.1.1',NULL,NULL,NULL);
+	// INSERT INTO parsed VALUES('2023-10-07 12:00:00.02 MDT',1,002,'0x7f0e8136c3aec6bbde74dfbad17aef1c','sw_a','abc123def',NULL,NULL,NULL,NULL);
+	// INSERT INTO parsed VALUES('2023-10-07 12:00:00.03 MDT',1,003,'0x4907fb17a4212e2e09897fafa1cb758a','sw_a','127.0.0.1:8080','1','x20','X30',NULL);
+	// INSERT INTO parsed VALUES('2023-10-07 12:00:00.04 MDT',1,004,'0x1b7739c1e24d3a837e7821ecfb9a1be1','sw_a','3.cd','2','ABC.123_45','30',NULL);
+	// INSERT INTO parsed VALUES('2023-10-07 12:00:00.05 MDT',1,005,'0x1b7739c1e24d3a837e7821ecfb9a1be1','sw_a','4.ef','3','DEF.678_90','40',NULL);
+	// INSERT INTO parsed VALUES('2023-10-07 12:00:00.06 MDT',1,006,'0x1b7739c1e24d3a837e7821ecfb9a1be1','sw_a','5.gh','4','GHI.098_76','50',NULL);
 	//
 	// SQL with numColumns truncating extracts:
-	// INSERT INTO parsed VALUES('2023-10-07 12:00:00.00 MDT',0,0,0xa5a3dba744d3c6f1372f888f54447553,'sw_a','12.Ab.34','789');
-	// INSERT INTO parsed VALUES('2023-10-07 12:00:00.01 MDT',1,001,0x9bd3989cf85b232ddadd73a1a312b249,'sw_b','1.2.34','a.1.1');
-	// INSERT INTO parsed VALUES('2023-10-07 12:00:00.02 MDT',1,002,0x7f0e8136c3aec6bbde74dfbad17aef1c,'sw_a','abc123def',NULL);
-	// INSERT INTO parsed VALUES('2023-10-07 12:00:00.03 MDT',1,003,0x4907fb17a4212e2e09897fafa1cb758a,'sw_a','127.0.0.1:8080','1');
-	// INSERT INTO parsed VALUES('2023-10-07 12:00:00.04 MDT',1,004,0x1b7739c1e24d3a837e7821ecfb9a1be1,'sw_a','3.cd','2');
-	// INSERT INTO parsed VALUES('2023-10-07 12:00:00.05 MDT',1,005,0x1b7739c1e24d3a837e7821ecfb9a1be1,'sw_a','4.ef','3');
-	// INSERT INTO parsed VALUES('2023-10-07 12:00:00.06 MDT',1,006,0x1b7739c1e24d3a837e7821ecfb9a1be1,'sw_a','5.gh','4');
+	// INSERT INTO parsed VALUES('2023-10-07 12:00:00.00 MDT',0,0,'0xa5a3dba744d3c6f1372f888f54447553','sw_a','12.Ab.34','789');
+	// INSERT INTO parsed VALUES('2023-10-07 12:00:00.01 MDT',1,001,'0x9bd3989cf85b232ddadd73a1a312b249','sw_b','1.2.34','a.1.1');
+	// INSERT INTO parsed VALUES('2023-10-07 12:00:00.02 MDT',1,002,'0x7f0e8136c3aec6bbde74dfbad17aef1c','sw_a','abc123def',NULL);
+	// INSERT INTO parsed VALUES('2023-10-07 12:00:00.03 MDT',1,003,'0x4907fb17a4212e2e09897fafa1cb758a','sw_a','127.0.0.1:8080','1');
+	// INSERT INTO parsed VALUES('2023-10-07 12:00:00.04 MDT',1,004,'0x1b7739c1e24d3a837e7821ecfb9a1be1','sw_a','3.cd','2');
+	// INSERT INTO parsed VALUES('2023-10-07 12:00:00.05 MDT',1,005,'0x1b7739c1e24d3a837e7821ecfb9a1be1','sw_a','4.ef','3');
+	// INSERT INTO parsed VALUES('2023-10-07 12:00:00.06 MDT',1,006,'0x1b7739c1e24d3a837e7821ecfb9a1be1','sw_a','5.gh','4');
 }
