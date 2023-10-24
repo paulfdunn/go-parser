@@ -311,63 +311,8 @@ func processScanner(scnr *parser.Scanner, flags flags, parsedOutputFilePath stri
 	}
 
 	for row := range dataChan {
-		if flags.uniqueId == "" && flags.uniqueIdRegex != nil {
-			match := flags.uniqueIdRegex.FindStringSubmatch(row)
-			if match != nil {
-				flags.uniqueId = match[1]
-				lpf(logh.Info, "UniqueID found via regex: %s", flags.uniqueId)
-			}
-		}
-
-		if scnr.Filter(row) {
-			continue
-		}
-
-		// Replace, split, and extract.
-		row = scnr.Replace(row)
-		splits, err := scnr.Split(row)
-		if err != nil {
+		if err := processScannerRow(scnr, flags, row, outputWriter); err != nil {
 			unexpectedFieldCount++
-			lpf(logh.Error, "%+v, splits:%s", err, strings.Join(splits, scnr.OutputDelimiter))
-		}
-		extracts, errors := scnr.Extract(splits)
-		for _, err := range errors {
-			lpf(logh.Warning, "%s", err)
-		}
-
-		if scnr.HashingEnabled() {
-			sehc, err := scnr.SplitsExcludeHashColumns(splits, flags.hashFormat)
-			if err != nil {
-				lpf(logh.Error, "calling SplitsExcludeHashColumns: %s", err)
-			}
-			var out string
-
-			if flags.sqlColumns > 0 {
-				if flags.uniqueId != "" {
-					sehc = append([]string{flags.uniqueId}, sehc...)
-				}
-				out = scnr.SplitsToSql(flags.sqlColumns, flags.sqlDataTable, sehc, extracts)
-			} else {
-				out = flags.uniqueId + scnr.OutputDelimiter + strings.Join(sehc, scnr.OutputDelimiter) + "|EXTRACTS|" + strings.Join(extracts, scnr.OutputDelimiter)
-			}
-			outputWriter.WriteString(out + "\n")
-			if flags.stdout {
-				fmt.Println(out)
-			}
-		} else {
-			var out string
-			if flags.sqlColumns > 0 {
-				if flags.uniqueId != "" {
-					splits = append([]string{flags.uniqueId}, splits...)
-				}
-				out = scnr.SplitsToSql(flags.sqlColumns, flags.sqlDataTable, splits, extracts)
-			} else {
-				out = flags.uniqueId + scnr.OutputDelimiter + strings.Join(splits, scnr.OutputDelimiter) + "|EXTRACTS|" + strings.Join(extracts, scnr.OutputDelimiter)
-			}
-			outputWriter.WriteString(out + "\n")
-			if flags.stdout {
-				fmt.Println(out)
-			}
 		}
 	}
 
@@ -383,6 +328,69 @@ func processScanner(scnr *parser.Scanner, flags flags, parsedOutputFilePath stri
 	if scnr.HashingEnabled() {
 		saveHashes(scnr.HashCounts, scnr.HashMap, hashesOutputFilePath, flags)
 	}
+}
+
+func processScannerRow(scnr *parser.Scanner, flags flags, row string, outputWriter *bufio.Writer) error {
+	if flags.uniqueId == "" && flags.uniqueIdRegex != nil {
+		match := flags.uniqueIdRegex.FindStringSubmatch(row)
+		if match != nil {
+			flags.uniqueId = match[1]
+			lpf(logh.Info, "UniqueID found via regex: %s", flags.uniqueId)
+		}
+	}
+
+	if scnr.Filter(row) {
+		return nil
+	}
+
+	// Replace, split, and extract.
+	row = scnr.Replace(row)
+	splits, err := scnr.Split(row)
+	if err != nil {
+		lpf(logh.Error, "%+v, splits:%s", err, strings.Join(splits, scnr.OutputDelimiter))
+		return err
+	}
+	extracts, errors := scnr.Extract(splits)
+	for _, err := range errors {
+		lpf(logh.Warning, "%s", err)
+	}
+
+	if scnr.HashingEnabled() {
+		sehc, err := scnr.SplitsExcludeHashColumns(splits, flags.hashFormat)
+		if err != nil {
+			lpf(logh.Error, "calling SplitsExcludeHashColumns: %s", err)
+		}
+		var out string
+
+		if flags.sqlColumns > 0 {
+			if flags.uniqueId != "" {
+				sehc = append([]string{flags.uniqueId}, sehc...)
+			}
+			out = scnr.SplitsToSql(flags.sqlColumns, flags.sqlDataTable, sehc, extracts)
+		} else {
+			out = flags.uniqueId + scnr.OutputDelimiter + strings.Join(sehc, scnr.OutputDelimiter) + "|EXTRACTS|" + strings.Join(extracts, scnr.OutputDelimiter)
+		}
+		outputWriter.WriteString(out + "\n")
+		if flags.stdout {
+			fmt.Println(out)
+		}
+	} else {
+		var out string
+		if flags.sqlColumns > 0 {
+			if flags.uniqueId != "" {
+				splits = append([]string{flags.uniqueId}, splits...)
+			}
+			out = scnr.SplitsToSql(flags.sqlColumns, flags.sqlDataTable, splits, extracts)
+		} else {
+			out = flags.uniqueId + scnr.OutputDelimiter + strings.Join(splits, scnr.OutputDelimiter) + "|EXTRACTS|" + strings.Join(extracts, scnr.OutputDelimiter)
+		}
+		outputWriter.WriteString(out + "\n")
+		if flags.stdout {
+			fmt.Println(out)
+		}
+	}
+
+	return nil
 }
 
 // saveHashes writes the hashes out to a file for later importing into a database.
@@ -424,8 +432,7 @@ func saveHashes(hashCounts map[string]int, hashMap map[string]string, hashesOutp
 }
 
 // sqlite3Import is used to import the SQL output into a sqlite3 database.
-// Sqlite3 will create the file if it does not exist. It is not great, as that means the user
-// didn't create the table either. In which case, sqlite3 does the best it can and imports.
+// The sqlite file and tables must be created prior to import.
 func sqlite3Import(sqlite3FilePath, outputFilePath string) {
 	b, _ := os.ReadFile(outputFilePath)
 	lpf(logh.Debug, string(b))
