@@ -346,6 +346,26 @@ func Hash(input string, format HashFormat) (string, error) {
 	return out, err
 }
 
+// Hash8 implements the djb2 hash described here: http://www.cse.yorku.ca/~oz/hash.html
+// and returns only 8 bytes.
+func Hash8(input string, format HashFormat) (string, error) {
+	hash := 0
+	for _, v := range input {
+		hash = (hash * 33) + int(v)
+	}
+	if hash < 0 {
+		hash = -hash
+	}
+	var out string
+	switch format {
+	case HASH_FORMAT_STRING:
+		out = fmt.Sprintf("'0x%x'", hash)
+	case HASH_FORMAT_SQL:
+		out = fmt.Sprintf("x'%016x'", hash)
+	}
+	return out, nil
+}
+
 // NewInputs unmarshalls a JSON file into a new Inputs object.
 func NewInputs(filePath string) (*Inputs, error) {
 	inputBytes, err := os.ReadFile(filePath)
