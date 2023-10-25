@@ -271,6 +271,7 @@ func parseFile(inputs *parser.Inputs, flags *flags) {
 	hashesOutputFilePathUnlocked := filepath.Join(dataDirectory, filepath.Base(flags.dataFilePath)+hashesOutputFileSuffix)
 	os.Rename(hashesOutputFilePath, hashesOutputFilePathUnlocked)
 
+	// If the data is being imported into a DB, do the import and remove tne output file.
 	if flags.sqlite3FilePath != "" {
 		if scnr.HashingEnabled() && flags.sqlHashTable != "" {
 			sqlite3Import(flags.sqlite3FilePath, hashesOutputFilePathUnlocked)
@@ -406,10 +407,10 @@ func saveHashes(hashCounts map[string]int, hashMap map[string]string, hashesOutp
 
 	sortedHashKeys := parser.SortedHashMapCounts(hashCounts)
 	lpf(logh.Info, "len(hashCounts)=%d", len(hashCounts))
-	lpf(logh.Info, "Hashes and counts:")
+	lpf(logh.Debug, "Hashes and counts:")
 	var dump string
 	for _, v := range sortedHashKeys {
-		lpf(logh.Info, "hash: %s, count: %d, value: %s", v, hashCounts[v], hashMap[v])
+		lpf(logh.Debug, "hash: %s, count: %d, value: %s", v, hashCounts[v], hashMap[v])
 		var out string
 		if flags.sqlColumns > 0 {
 			out = fmt.Sprintf("INSERT INTO %s VALUES(%s, '%s');", flags.sqlHashTable, v, hashMap[v]) + "\n"
