@@ -299,7 +299,7 @@ func (scnr *Scanner) SplitsExcludeHashColumns(splits []string, hashFormat HashFo
 // might be produced. If the length of splits exceeds numColumns, the VALUES will be truncated.
 // splits will be padded according to Scanner.SqlQuoteColumns, all extracts are quoted.
 func (scnr *Scanner) SplitsToSql(numColumns int, table string, splits []string, extracts []string) string {
-	out := fmt.Sprintf("INSERT INTO %s VALUES(", table)
+	out := fmt.Sprintf("INSERT OR IGNORE INTO %s VALUES(", table)
 	sliceIn := append(splits, extracts...)
 
 	// Turn splits and extract into a comma separated string, quoted as specified.
