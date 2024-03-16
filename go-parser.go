@@ -23,8 +23,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/paulfdunn/go-helper/logh"
 	"github.com/paulfdunn/go-parser/parser"
-	"github.com/paulfdunn/logh"
 )
 
 type flags struct {

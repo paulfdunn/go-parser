@@ -17,11 +17,10 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"sort"
 	"strings"
 	"time"
-
-	"golang.org/x/exp/slices"
 )
 
 // Extract objects determine how extractions (Scanner.Extract) occur.

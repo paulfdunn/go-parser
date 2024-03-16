@@ -1,4 +1,4 @@
-github.com/paulfdunn/logh v1.0.0 h1:e18++q3hFn8oe/1XlSWCHOYKYEligF/ErblkkzFeet4=
-github.com/paulfdunn/logh v1.0.0/go.mod h1:ssWlcOLLlVWXG4AY+1oB/0MOVdahgfVibvia7s6uwzc=
-golang.org/x/exp v0.0.0-20231006140011-7918f672742d h1:jtJma62tbqLibJ5sFQz8bKtEM8rJBtfilJ2qTU199MI=
-golang.org/x/exp v0.0.0-20231006140011-7918f672742d/go.mod h1:ldy0pHrwJyGW56pPQzzkH36rKxoZW1tw7ZJpeKx+hdo=
+github.com/paulfdunn/go-helper/logh v1.0.5 h1:Vzp82xgy7330a80BLgRzU+KzP4X8MBhHTjjEWn1lBPo=
+github.com/paulfdunn/go-helper/logh v1.0.5/go.mod h1:PFr7lZL62H/g6c+3Ym7QJ2dIS8G7Awx+IhmqY1YQg+Q=
+golang.org/x/exp v0.0.0-20240314144324-c7f7c6466f7f h1:3CW0unweImhOzd5FmYuRsD4Y4oQFKZIjAnKbjV4WIrw=
+golang.org/x/exp v0.0.0-20240314144324-c7f7c6466f7f/go.mod h1:CxmFvTBINI24O/j8iY7H1xHzx2i4OsyguNBmN/uPtqc=

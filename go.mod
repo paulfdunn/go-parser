@@ -1,7 +1,8 @@
 module github.com/paulfdunn/go-parser
 
-go 1.21
+go 1.21.7
 
-require github.com/paulfdunn/logh v1.0.0
-
-require golang.org/x/exp v0.0.0-20231006140011-7918f672742d
+require (
+	github.com/paulfdunn/go-helper/logh v1.0.5
+	golang.org/x/exp v0.0.0-20240314144324-c7f7c6466f7f
+)
